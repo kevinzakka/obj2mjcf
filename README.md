@@ -2,6 +2,12 @@
 
 A tool for converting Wavefront OBJ files into MuJoCo sub-meshes grouped by material.
 
+## Installation
+
+```bash
+pip install obj2mjcf
+```
+
 ## Usage
 
 ```bash
