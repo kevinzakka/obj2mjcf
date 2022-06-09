@@ -1,44 +1,56 @@
-"""Splits an OBJ into sub-meshes grouped by material."""
-
-from typing import List, Optional
-import trimesh
-from pathlib import Path
+import argparse
+import logging
 import shutil
-import numpy as np
 from dataclasses import dataclass
+from pathlib import Path
+from typing import List, Optional
+
+import trimesh
 from dm_control import mjcf
 
-from absl import app, flags, logging
 
-FLAGS = flags.FLAGS
+def main() -> None:
+    parser = argparse.ArgumentParser()
 
-flags.DEFINE_string("obj_dir", None, "Path to a directory containing obj files.")
-flags.DEFINE_boolean("save_mtl", False, "Whether to save the mtl files.")
-flags.DEFINE_boolean("save_mjcf", False, "Whether to save an example MJCF file.")
+    parser.add_argument(
+        "--obj_dir",
+        type=str,
+        required=True,
+        help="Path to a directory containing obj files.",
+    )
+    parser.add_argument(
+        "--save_mtl",
+        default=False,
+        action="store_true",
+        help="Whether to save the mtl files.",
+    )
+    parser.add_argument(
+        "--save_mjcf",
+        default=False,
+        action="store_true",
+        help="Whether to save an example MJCF file.",
+    )
+    parser.add_argument(
+        "--verbose",
+        default=False,
+        action="store_true",
+        help="Whether to print verbose output.",
+    )
 
-# Rotate mesh about x-axis by 90 degrees.
-# This makes +Z the up direction.
-# NOTE(kevin): Turns out this was needed because when I exported the mesh from Blender,
-# I didn't correctly select the up direction.
-# TODO(kevin): Remove this.
-_ROTM = np.array([
-    [1, 0, 0, 0],
-    [0, 0, -1, 0],
-    [0, 1, 0, 0],
-    [0, 0, 0, 1],
-])
+    args = parser.parse_args()
 
+    if args.verbose:
+        logging.getLogger().setLevel(logging.INFO)
 
-def main(_) -> None:
     # Get all obj files in the directory.
-    obj_files = list(Path(FLAGS.obj_dir).glob("*.obj"))
+    obj_files = list(Path(args.obj_dir).glob("*.obj"))
     logging.info(f"Found {len(obj_files)} obj files.")
 
     for obj_file in obj_files:
-        process_obj(obj_file)
+        process_obj(obj_file, args.save_mtl, args.save_mjcf)
 
 
-def process_obj(filename: Path) -> None:
+def process_obj(filename: Path, save_mtl: bool, save_mjcf: bool) -> None:
     # Create a directory with the same name as the OBJ file. The processed submeshes
     # and materials will be stored in this directory.
     work_dir = filename.parent / filename.stem
@@ -64,9 +76,7 @@ def process_obj(filename: Path) -> None:
             split_ids.append(i)
     sub_mtls = []
     for i in range(len(split_ids) - 1):
-        sub_mtls.append(
-            lines[split_ids[i] : split_ids[i + 1]]
-        )
+        sub_mtls.append(lines[split_ids[i] : split_ids[i + 1]])
     sub_mtls.append(lines[split_ids[-1] :])
 
     @dataclass
@@ -113,13 +123,14 @@ def process_obj(filename: Path) -> None:
         logging.info(f"\tSaving submesh {savename}")
         geom.export(savename, include_texture=True, header=None)
 
-    # Delete any MTL files that were created during the trimesh processing, if any.
-    files = [x for x in work_dir.glob("**/*") if x.is_file() and "material_0" in x.name]
-    for file in files:
+    # Delete any MTL files that were created during trimesh processing, if any.
+    for file in [
+        x for x in work_dir.glob("**/*") if x.is_file() and "material_0" in x.name
+    ]:
         file.unlink()
 
-    # Uneccessary, but save an MTL file for each submesh.
-    if FLAGS.save_mtl:
+    # Save an MTL file for each submesh if desired.
+    if save_mtl:
         for i, mtl in enumerate(sub_mtls):
             mtl_name = mtl[0].split(" ")[1].strip()
             for line in mtl:
@@ -144,19 +155,11 @@ def process_obj(filename: Path) -> None:
             with open(savename, "w") as f:
                 f.write("".join(lines))
 
-    # MJCF example file.
-    if FLAGS.save_mjcf:
+    # Save an MJCF example file.
+    if save_mjcf:
         model = mjcf.RootElement()
         model.compiler.angle = "radian"
-        model.asset.add(
-            "texture",
-            type="skybox",
-            builtin="gradient",
-            rgb1="0.3 0.5 0.7",
-            rgb2="0 0 0",
-            width="512",
-            height="3072",
-        )
+        # Add assets.
         for material in mtls:
             if material.texture is not None:
                 model.asset.add(
@@ -178,25 +181,22 @@ def process_obj(filename: Path) -> None:
                     name=material.name,
                     rgba=material.diffuse + " 1.0",
                 )
-
         # Add bodies.
         obj_body = model.worldbody.add("body", name=filename.stem)
         for i, (name, geom) in enumerate(mesh.geometry.items()):
-            savename = work_dir / f"{filename.stem}_{i}.obj"
-
+            meshname = work_dir / f"{filename.stem}_{i}.obj"
             model.asset.add(
                 "mesh",
-                name=str(savename.stem),
-                file=str(savename),
+                name=str(meshname.stem),
+                file=str(meshname),
             )
-
             obj_body.add(
                 "geom",
                 type="mesh",
-                mesh=str(savename.stem),
+                mesh=str(meshname.stem),
                 material=name,
             )
-
+        # Dump.
         mjcf_dir = work_dir / "mjcf"
         mjcf_dir.mkdir(exist_ok=True)
         mjcf.export_with_assets(
@@ -207,5 +207,4 @@ def process_obj(filename: Path) -> None:
 
 
 if __name__ == "__main__":
-    flags.mark_flags_as_required(["obj_dir"])
-    app.run(main)
+    main()
