@@ -108,7 +108,7 @@ def process_obj(filename: Path) -> None:
 
     logging.info("Grouping and saving submeshes by material...")
     for i, geom in enumerate(mesh.geometry.values()):
-        geom.apply_transform(_ROTM)
+        # geom.apply_transform(_ROTM)
         savename = str(work_dir / f"{filename.stem}_{i}.obj")
         logging.info(f"\tSaving submesh {savename}")
         geom.export(savename, include_texture=True, header=None)
