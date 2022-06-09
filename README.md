@@ -2,6 +2,12 @@
 
 A tool for converting Wavefront OBJ files into MuJoCo sub-meshes grouped by material.
 
+Currently, MuJoCo does not support OBJ files with groups or objects (i.e., `o` or `g`). Furthermore, only 1 material can be assigned per mesh. This tool is designed to split such OBJ files into sub-meshes grouped by material. The resulting sub-meshes can then be used as a drop-in replacement for the original OBJ file. The result is vastly enhanced visuals for your model:
+
+| Before | After |
+|--------|-------|
+|<img src="assets/before.gif" height="200"/>|<img src="assets/after.gif" height="200"/>|
+
 ## Installation
 
 ```bash
