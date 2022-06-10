@@ -24,6 +24,7 @@ core_requirements = [
     "Pillow>=9.1.1",
     "dm-control>=1.0.3.post1",
     "mujoco>=2.2.0",
+    "dcargs>=0.0.21",
     "numpy",
     "tqdm",
 ]
@@ -45,7 +46,7 @@ author = "Kevin Zakka"
 
 author_email = "kevinarmandzakka@gmail.com"
 
-description = "A tool for converting Wavefront OBJ files into MuJoCo sub-meshes grouped by material."
+description = "A tool for converting Wavefront OBJ files to multiple MuJoCo meshes grouped by material."
 
 
 setup(

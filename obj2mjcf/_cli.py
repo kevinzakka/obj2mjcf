@@ -1,14 +1,15 @@
-import argparse
+import enum
 import logging
 import os
 import shutil
 import subprocess
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from distutils.spawn import find_executable
 from pathlib import Path
 from typing import List, Optional
 
+import dcargs
 import tqdm
 import trimesh
 from dm_control import mjcf
@@ -23,7 +24,62 @@ _VHACD_EXECUTABLE = find_executable("testVHACD", path=os.environ["PATH"])
 _VHACD_OUTPUTS = ["decomp.obj", "decomp.stl"]
 
 
-def decompose_convex(filename: Path, work_dir: Path, use_vhacd: bool) -> bool:
+class FillMode(enum.Enum):
+    """Enum for specifying how to fill in gaps in the mesh."""
+
+    FLOOD = enum.auto()
+    SURFACE = enum.auto()
+    RAYCAST = enum.auto()
+
+
+@dataclass(frozen=True)
+class VhacdArgs:
+    """V-HACD specific arguments."""
+
+    max_output_convex_hulls: int = 32
+    """Maximum number of output convex hulls."""
+    voxel_resolution: int = 100_000
+    """Total number of voxels to use."""
+    volume_error_percent: float = 1.0
+    """Volume error allowed as a percentage."""
+    max_recursion_depth: int = 12
+    """Maximum recursion depth."""
+    shrink_wrap: bool = True
+    """Whether or not to shrinkwrap output to source mesh."""
+    fill_mode: FillMode = FillMode.FLOOD
+    """Fill mode."""
+    max_hull_vert_count: int = 64
+    """Maximum number of vertices in the output convex hull."""
+    run_async: bool = True
+    """Whether or not to run asynchronously."""
+    min_edge_length: int = 2
+    """Minimum size of a voxel edge."""
+    split_hull: bool = False
+    """If false, splits hulls in the middle. If true, tries to find optimal split plane
+    location."""
+
+
+@dataclass(frozen=True)
+class Args:
+    """obj2mjcf arguments."""
+
+    obj_dir: str
+    """Path to a directory containing obj files."""
+    use_vhacd: bool = False
+    """Whether to create a convex decomposition for the collision geom."""
+    save_mtl: bool = False
+    """Whether to save the mtl files."""
+    save_mjcf: bool = False
+    """Whether to save an example MJCF file."""
+    verbose: bool = False
+    """Whether to print verbose output."""
+    vhacd_args: VhacdArgs = field(default_factory=VhacdArgs)
+    """Arguments to pass to VHACD."""
+
+
+def decompose_convex(
+    filename: Path, work_dir: Path, use_vhacd: bool, vhacd_args: VhacdArgs
+) -> bool:
     if not use_vhacd:
         return False
 
@@ -46,7 +102,32 @@ def decompose_convex(filename: Path, work_dir: Path, use_vhacd: bool) -> bool:
 
         # Call V-HACD, suppressing output.
         ret = subprocess.run(
-            [f"{_VHACD_EXECUTABLE}", obj_file.name, "-o", "obj"],
+            [
+                f"{_VHACD_EXECUTABLE}",
+                obj_file.name,
+                "-o",
+                "obj",
+                "-h",
+                f"{vhacd_args.max_output_convex_hulls}",
+                "-r",
+                f"{vhacd_args.voxel_resolution}",
+                "-e",
+                f"{vhacd_args.volume_error_percent}",
+                "-d",
+                f"{vhacd_args.max_recursion_depth}",
+                "-s",
+                f"{int(vhacd_args.shrink_wrap)}",
+                "-f",
+                f"{vhacd_args.fill_mode.name.lower()}",
+                "-v",
+                f"{vhacd_args.max_hull_vert_count}",
+                "-a",
+                f"{int(vhacd_args.run_async)}",
+                "-l",
+                f"{vhacd_args.min_edge_length}",
+                "-p",
+                f"{int(vhacd_args.split_hull)}",
+            ],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.STDOUT,
             check=True,
@@ -74,9 +155,7 @@ def decompose_convex(filename: Path, work_dir: Path, use_vhacd: bool) -> bool:
     return True
 
 
-def process_obj(
-    filename: Path, save_mtl: bool, save_mjcf: bool, use_vhacd: bool
-) -> None:
+def process_obj(filename: Path, args: Args) -> None:
     # Create a directory with the same name as the OBJ file. The processed submeshes
     # and materials will be stored in this directory.
     work_dir = filename.parent / filename.stem
@@ -89,7 +168,9 @@ def process_obj(
     logging.info(f"Saving processed meshes to {work_dir}")
 
     # Decompose the mesh into convex pieces if V-HACD is available.
-    decomp_success = decompose_convex(filename, work_dir, use_vhacd)
+    decomp_success = decompose_convex(
+        filename, work_dir, args.use_vhacd, args.vhacd_args
+    )
 
     # Read the MTL file from the OBJ file.
     with open(filename, "r") as f:
@@ -173,7 +254,7 @@ def process_obj(
         file.unlink()
 
     # Save an MTL file for each submesh if desired.
-    if save_mtl:
+    if args.save_mtl:
         for i, mtl in enumerate(sub_mtls):
             mtl_name = mtl[0].split(" ")[1].strip()
             for line in mtl:
@@ -199,7 +280,7 @@ def process_obj(
                 f.write("".join(lines))
 
     # Save an MJCF example file.
-    if save_mjcf:
+    if args.save_mjcf:
         model = mjcf.RootElement()
         # Add assets.
         for material in mtls:
@@ -308,40 +389,7 @@ def process_obj(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument(
-        "--obj_dir",
-        type=str,
-        required=True,
-        help="Path to a directory containing obj files.",
-    )
-    parser.add_argument(
-        "--use_vhacd",
-        default=False,
-        action="store_true",
-        help="Whether to create a convex decomposition for the collision geom.",
-    )
-    parser.add_argument(
-        "--save_mtl",
-        default=False,
-        action="store_true",
-        help="Whether to save the mtl files.",
-    )
-    parser.add_argument(
-        "--save_mjcf",
-        default=False,
-        action="store_true",
-        help="Whether to save an example MJCF file.",
-    )
-    parser.add_argument(
-        "--verbose",
-        default=False,
-        action="store_true",
-        help="Whether to print verbose output.",
-    )
-
-    args = parser.parse_args()
+    args = dcargs.parse(Args)
 
     if args.verbose:
         logging.getLogger().setLevel(logging.INFO)
@@ -351,7 +399,7 @@ def main() -> None:
     logging.info(f"Found {len(obj_files)} obj files.")
 
     for obj_file in tqdm.tqdm(obj_files):
-        process_obj(obj_file, args.save_mtl, args.save_mjcf, args.use_vhacd)
+        process_obj(obj_file, args)
 
 
 if __name__ == "__main__":
