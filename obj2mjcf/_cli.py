@@ -3,94 +3,68 @@ import logging
 import os
 import shutil
 import subprocess
+import tempfile
 from dataclasses import dataclass
 from distutils.spawn import find_executable
 from pathlib import Path
 from typing import List, Optional
 
+import tqdm
 import trimesh
 from dm_control import mjcf
 from PIL import Image
 
-# Find the V-HACD executable.
-# Trimesh hasn't yet updated their code for the new V-HACD executable (v 4.0) so we
-# are not going to use their `convex_decomposition` function for now.
-_search_path = os.environ["PATH"]
-_VHACD_EXECUTABLE = None
-for _name in ["vhacd", "testVHACD"]:
-    _VHACD_EXECUTABLE = find_executable(_name, path=_search_path)
-    if _VHACD_EXECUTABLE is not None:
-        break
+# Find the V-HACD v4.0 executable in the system path.
+# Note trimesh has not updated their code to work with v4.0 which is why we do not use
+# their `convex_decomposition` function.
+# TODO(kevin): Is there a way to assert that the V-HACD version is 4.0?
+_VHACD_EXECUTABLE = find_executable("testVHACD", path=os.environ["PATH"])
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument(
-        "--obj_dir",
-        type=str,
-        required=True,
-        help="Path to a directory containing obj files.",
-    )
-    parser.add_argument(
-        "--use_vhacd",
-        default=False,
-        action="store_true",
-        help="Whether to create a convex decomposition for the collision geom.",
-    )
-    parser.add_argument(
-        "--save_mtl",
-        default=False,
-        action="store_true",
-        help="Whether to save the mtl files.",
-    )
-    parser.add_argument(
-        "--save_mjcf",
-        default=False,
-        action="store_true",
-        help="Whether to save an example MJCF file.",
-    )
-    parser.add_argument(
-        "--verbose",
-        default=False,
-        action="store_true",
-        help="Whether to print verbose output.",
-    )
-
-    args = parser.parse_args()
-
-    if args.verbose:
-        logging.getLogger().setLevel(logging.INFO)
-
-    # Get all obj files in the directory.
-    obj_files = list(Path(args.obj_dir).glob("*.obj"))
-    logging.info(f"Found {len(obj_files)} obj files.")
-
-    for obj_file in obj_files:
-        process_obj(obj_file, args.save_mtl, args.save_mjcf, args.use_vhacd)
-
-
-def decompose_convex(filename: Path, work_dir: Path) -> bool:
-    ret = subprocess.run(
-        [f"{_VHACD_EXECUTABLE}", str(filename.absolute().resolve())], check=True
-    )
-    if ret.returncode != 0:
-        logging.error(f"V-HACD failed on {filename}.")
+def decompose_convex(filename: Path, work_dir: Path, use_vhacd: bool) -> bool:
+    if not use_vhacd:
         return False
 
-    mesh = trimesh.load("./decomp.obj", split_object=True, process=False)
+    if _VHACD_EXECUTABLE is None:
+        logging.info(
+            "`use_vhacd` was set but V-HACD was not found in the system path. "
+            "Skipping convex decomposition."
+        )
+        return False
 
-    if isinstance(mesh, trimesh.base.Trimesh):
-        savename = str(work_dir / f"{filename.stem}_collision.obj")
-        mesh.export(savename, include_texture=False, header=None)
-    else:
-        for i, geom in enumerate(mesh.geometry.values()):
-            savename = str(work_dir / f"{filename.stem}_collision_{i}.obj")
-            geom.export(savename, include_texture=True, header=None)
+    obj_file = filename.resolve()
+    logging.info(f"Decomposing {obj_file}")
 
-    # Delete the decomp.obj and decomp.stl files.
-    os.remove("decomp.obj")
-    os.remove("decomp.stl")
+    with tempfile.TemporaryDirectory() as tmpdirname:
+        prev_dir = os.getcwd()
+        os.chdir(tmpdirname)
+
+        # Call V-HACD, suppressing output.
+        ret = subprocess.run(
+            [f"{_VHACD_EXECUTABLE}", obj_file],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.STDOUT,
+            check=True,
+        )
+        if ret.returncode != 0:
+            logging.error(f"V-HACD failed on {filename}.")
+            return False
+
+        # V-HACD saves 2 files to the current directory: decomp.stl and decomp.obj.
+        # decomp.stl holds the convex hull of the mesh. We don't need it.
+        # decomp.obj holds the convex approximation.
+        convex_filename = Path(tmpdirname) / "decomp.obj"
+        mesh = trimesh.load(convex_filename, split_object=True, process=False)
+
+        os.chdir(prev_dir)
+
+        if isinstance(mesh, trimesh.base.Trimesh):
+            savename = str(work_dir / f"{filename.stem}_collision.obj")
+            mesh.export(savename, include_texture=False, header=None)
+        else:
+            for i, geom in enumerate(mesh.geometry.values()):
+                savename = str(work_dir / f"{filename.stem}_collision_{i}.obj")
+                geom.export(savename, include_texture=False, header=None)
 
     return True
 
@@ -105,14 +79,7 @@ def process_obj(
     logging.info(f"Saving processed meshes to {work_dir}")
 
     # Decompose the mesh into convex pieces if V-HACD is available.
-    decomp_success = False
-    if use_vhacd:
-        if _VHACD_EXECUTABLE is None:
-            logging.info("V-HACD is not available. Skipping convex decomposition.")
-        else:
-            decomp_success = decompose_convex(filename, work_dir)
-    else:
-        logging.info("Skipping convex decomposition.")
+    decomp_success = decompose_convex(filename, work_dir, use_vhacd)
 
     # Read the MTL file from the OBJ file.
     with open(filename, "r") as f:
@@ -224,7 +191,6 @@ def process_obj(
     # Save an MJCF example file.
     if save_mjcf:
         model = mjcf.RootElement()
-        model.compiler.angle = "radian"
         # Add assets.
         for material in mtls:
             if material.texture is not None:
@@ -247,7 +213,7 @@ def process_obj(
                     name=material.name,
                     rgba=material.diffuse + " 1.0",
                 )
-        # Add bodies.
+        # Add visual geoms.
         obj_body = model.worldbody.add("body", name=filename.stem)
         if isinstance(mesh, trimesh.base.Trimesh):
             meshname = work_dir / f"{filename.stem}.obj"
@@ -279,6 +245,7 @@ def process_obj(
                     conaffinity="0",
                     group="2",
                 )
+        # Add collision geoms.
         if decomp_success:
             # Find collision files from the decomposed convex hulls.
             collisions = [
@@ -327,6 +294,53 @@ def process_obj(
             mjcf_dir,
             f"{filename.stem}.xml",
         )
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument(
+        "--obj_dir",
+        type=str,
+        required=True,
+        help="Path to a directory containing obj files.",
+    )
+    parser.add_argument(
+        "--use_vhacd",
+        default=False,
+        action="store_true",
+        help="Whether to create a convex decomposition for the collision geom.",
+    )
+    parser.add_argument(
+        "--save_mtl",
+        default=False,
+        action="store_true",
+        help="Whether to save the mtl files.",
+    )
+    parser.add_argument(
+        "--save_mjcf",
+        default=False,
+        action="store_true",
+        help="Whether to save an example MJCF file.",
+    )
+    parser.add_argument(
+        "--verbose",
+        default=False,
+        action="store_true",
+        help="Whether to print verbose output.",
+    )
+
+    args = parser.parse_args()
+
+    if args.verbose:
+        logging.getLogger().setLevel(logging.INFO)
+
+    # Get all obj files in the directory.
+    obj_files = list(Path(args.obj_dir).glob("*.obj"))
+    logging.info(f"Found {len(obj_files)} obj files.")
+
+    for obj_file in tqdm.tqdm(obj_files):
+        process_obj(obj_file, args.save_mtl, args.save_mjcf, args.use_vhacd)
 
 
 if __name__ == "__main__":

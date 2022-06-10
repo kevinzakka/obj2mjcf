@@ -25,6 +25,7 @@ core_requirements = [
     "dm-control>=1.0.3.post1",
     "mujoco>=2.2.0",
     "numpy",
+    "tqdm",
 ]
 
 classifiers = [
@@ -66,5 +67,5 @@ setup(
     python_requires=">=3.7",
     install_requires=core_requirements,
     classifiers=classifiers,
-    entry_points={"console_scripts": [f"{name}={name}.cli:main"]},
+    entry_points={"console_scripts": [f"{name}={name}._cli:main"]},
 )

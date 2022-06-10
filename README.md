@@ -1,12 +1,19 @@
 # obj2mjcf
 
-A tool for converting Wavefront OBJ files into MuJoCo sub-meshes grouped by material.
+[![PyPI Python Version][pypi-versions-badge]][pypi]
+[![PyPI version][pypi-badge]][pypi]
+
+[pypi-versions-badge]: https://img.shields.io/pypi/pyversions/obj2mjcf
+[pypi-badge]: https://badge.fury.io/py/obj2mjcf.svg
+[pypi]: https://pypi.org/project/obj2mjcf/
+
+A tool for converting Wavefront OBJ files to multiple MuJoCo meshes grouped by material.
 
 Currently, MuJoCo does not support OBJ files with groups or objects (i.e., `o` or `g`). Furthermore, only 1 material can be assigned per mesh. This tool is designed to split such OBJ files into sub-meshes grouped by material. The resulting sub-meshes can then be used as a drop-in replacement for the original OBJ file. The result is vastly enhanced visuals for your model:
 
 | Before | After |
 |--------|-------|
-|<img src="assets/before.gif" height="200"/>|<img src="assets/after.gif" height="200"/>|
+|<img src="https://raw.githubusercontent.com/kevinzakka/obj2mjcf/main/assets/before.png" height="200"/>|<img src="https://raw.githubusercontent.com/kevinzakka/obj2mjcf/main/assets/after.png" height="200"/>|
 
 ## Installation
 
@@ -18,7 +25,7 @@ pip install obj2mjcf
 
 If you additionally install [V-HACD 4.0](https://github.com/kmammou/v-hacd), this tool will create a convex decomposition of the mesh to use as the collision geometry.
 
-<img src="assets/convex_collision.png" height="200"/>
+<img src="https://raw.githubusercontent.com/kevinzakka/obj2mjcf/main/assets/convex_collision.png" height="200"/>
 
 ## Usage
 
