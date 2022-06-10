@@ -19,6 +19,8 @@ from PIL import Image
 # their `convex_decomposition` function.
 # TODO(kevin): Is there a way to assert that the V-HACD version is 4.0?
 _VHACD_EXECUTABLE = find_executable("testVHACD", path=os.environ["PATH"])
+# Names of the V-HACD output files.
+_VHACD_OUTPUTS = ["decomp.obj", "decomp.stl"]
 
 
 def decompose_convex(filename: Path, work_dir: Path, use_vhacd: bool) -> bool:
@@ -32,14 +34,13 @@ def decompose_convex(filename: Path, work_dir: Path, use_vhacd: bool) -> bool:
         )
         return False
 
-    obj_file = filename.resolve()
-    logging.info(f"Decomposing {obj_file}")
+    logging.info(f"Decomposing {filename}")
 
     with tempfile.TemporaryDirectory() as tmpdirname:
         prev_dir = os.getcwd()
         os.chdir(tmpdirname)
 
-        shutil.copy(obj_file, tmpdirname)
+        shutil.copy(filename, tmpdirname)
 
         # Call V-HACD, suppressing output.
         ret = subprocess.run(
@@ -52,17 +53,18 @@ def decompose_convex(filename: Path, work_dir: Path, use_vhacd: bool) -> bool:
             logging.error(f"V-HACD failed on {filename}.")
             return False
 
+        # Remove the original obj file and the V-HACD output files.
+        for name in _VHACD_OUTPUTS + [filename.name]:
+            (Path(tmpdirname) / name).unlink()
+
         os.chdir(prev_dir)
 
-        # Get list of collisions.
+        # Get list of sorted collision files.
         collisions = list(Path(tmpdirname).glob("*.obj"))
         collisions.sort(key=lambda x: x.stem)
 
-        # Remove the original obj file.
-        collisions.pop(0)
-
         for i, filename in enumerate(collisions):
-            savename = str(work_dir / f"{obj_file.stem}_collision_{i}.obj")
+            savename = str(work_dir / f"{filename.stem}_collision_{i}.obj")
             shutil.move(str(filename), savename)
 
     return True
@@ -73,7 +75,12 @@ def process_obj(
 ) -> None:
     # Create a directory with the same name as the OBJ file. The processed submeshes
     # and materials will be stored in this directory.
-    work_dir = filename.parent / filename.stem
+    work_dir = (filename.parent / filename.stem).resolve()
+    if work_dir.exists():
+        raise RuntimeError(
+            f"{work_dir} already exists, maybe from a previous run? Please remove it "
+            "and try again."
+        )
     work_dir.mkdir(exist_ok=True)
     logging.info(f"Saving processed meshes to {work_dir}")
 
