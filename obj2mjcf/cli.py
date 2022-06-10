@@ -10,6 +10,7 @@ from typing import List, Optional
 
 import trimesh
 from dm_control import mjcf
+from PIL import Image
 
 # Find the V-HACD executable.
 # Trimesh hasn't yet updated their code for the new V-HACD executable (v 4.0) so we
@@ -144,17 +145,27 @@ def process_obj(
     mtls: List[Material] = []
     for mtl in sub_mtls:
         name = mtl[0].split(" ")[1].strip()
-        texture = None
+        texture_name = None
         for line in mtl:
             if "map_Kd" in line:
                 texture = line.split(" ")[1].strip()
-                shutil.copy(
-                    filename.parent / texture,
-                    work_dir / texture,
-                )
+                src_filename = filename.parent / texture
+                # MTL might use relative paths, so we need to resolve them.
+                src_filename = src_filename.resolve()
+                # We want a flat directory structure in work_dir.
+                texture_name = Path(texture).name
+                dst_filename = work_dir / texture_name
+                shutil.copy(src_filename, dst_filename)
+                # MuJoCo only supports PNG textures.
+                if Path(texture).suffix.lower() != ".png":
+                    image = Image.open(dst_filename)
+                    os.remove(dst_filename)
+                    dst_filename = (work_dir / Path(texture).stem).with_suffix(".png")
+                    image.save(dst_filename)
+                    texture_name = dst_filename.name
             if "Kd" in line:
                 diffuse = " ".join(line.split(" ")[1:]).strip()
-        mtls.append(Material(name, diffuse, texture))
+        mtls.append(Material(name, diffuse, texture_name))
     logging.info("Done processing MTL file.")
 
     logging.info("Processing OBJ file with trimesh...")
