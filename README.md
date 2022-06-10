@@ -14,14 +14,17 @@ Currently, MuJoCo does not support OBJ files with groups or objects (i.e., `o` o
 pip install obj2mjcf
 ```
 
+If you additionally install [V-HACD 4.0](https://github.com/kmammou/v-hacd), this tool will create a convex decomposition of the mesh to use as the collision geometry.
+
 ## Usage
 
 ```bash
-usage: obj2mjcf [-h] --obj_dir OBJ_DIR [--save_mtl] [--save_mjcf] [--verbose]
+usage: obj2mjcf [-h] --obj_dir OBJ_DIR [--use_vhacd] [--save_mtl] [--save_mjcf] [--verbose]
 
 optional arguments:
   -h, --help         show this help message and exit
   --obj_dir OBJ_DIR  Path to a directory containing obj files.
+  --use_vhacd        Whether to create a convex decomposition for the collision geom.
   --save_mtl         Whether to save the mtl files.
   --save_mjcf        Whether to save an example MJCF file.
   --verbose          Whether to print verbose output.

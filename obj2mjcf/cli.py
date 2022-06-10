@@ -1,12 +1,25 @@
 import argparse
 import logging
+import os
 import shutil
+import subprocess
 from dataclasses import dataclass
+from distutils.spawn import find_executable
 from pathlib import Path
 from typing import List, Optional
 
 import trimesh
 from dm_control import mjcf
+
+# Find the V-HACD executable.
+# Trimesh hasn't yet updated their code for the new V-HACD executable (v 4.0) so we
+# are not going to use their `convex_decomposition` function for now.
+_search_path = os.environ["PATH"]
+_VHACD_EXECUTABLE = None
+for _name in ["vhacd", "testVHACD"]:
+    _VHACD_EXECUTABLE = find_executable(_name, path=_search_path)
+    if _VHACD_EXECUTABLE is not None:
+        break
 
 
 def main() -> None:
@@ -17,6 +30,12 @@ def main() -> None:
         type=str,
         required=True,
         help="Path to a directory containing obj files.",
+    )
+    parser.add_argument(
+        "--use_vhacd",
+        default=False,
+        action="store_true",
+        help="Whether to create a convex decomposition for the collision geom.",
     )
     parser.add_argument(
         "--save_mtl",
@@ -47,15 +66,52 @@ def main() -> None:
     logging.info(f"Found {len(obj_files)} obj files.")
 
     for obj_file in obj_files:
-        process_obj(obj_file, args.save_mtl, args.save_mjcf)
+        process_obj(obj_file, args.save_mtl, args.save_mjcf, args.use_vhacd)
 
 
-def process_obj(filename: Path, save_mtl: bool, save_mjcf: bool) -> None:
+def decompose_convex(filename: Path, work_dir: Path) -> bool:
+    ret = subprocess.run(
+        [f"{_VHACD_EXECUTABLE}", str(filename.absolute().resolve())], check=True
+    )
+    if ret.returncode != 0:
+        logging.error(f"V-HACD failed on {filename}.")
+        return False
+
+    mesh = trimesh.load("./decomp.obj", split_object=True, process=False)
+
+    if isinstance(mesh, trimesh.base.Trimesh):
+        savename = str(work_dir / f"{filename.stem}_collision.obj")
+        mesh.export(savename, include_texture=False, header=None)
+    else:
+        for i, geom in enumerate(mesh.geometry.values()):
+            savename = str(work_dir / f"{filename.stem}_collision_{i}.obj")
+            geom.export(savename, include_texture=True, header=None)
+
+    # Delete the decomp.obj and decomp.stl files.
+    os.remove("decomp.obj")
+    os.remove("decomp.stl")
+
+    return True
+
+
+def process_obj(
+    filename: Path, save_mtl: bool, save_mjcf: bool, use_vhacd: bool
+) -> None:
     # Create a directory with the same name as the OBJ file. The processed submeshes
     # and materials will be stored in this directory.
     work_dir = filename.parent / filename.stem
     work_dir.mkdir(exist_ok=True)
     logging.info(f"Saving processed meshes to {work_dir}")
+
+    # Decompose the mesh into convex pieces if V-HACD is available.
+    decomp_success = False
+    if use_vhacd:
+        if _VHACD_EXECUTABLE is None:
+            logging.info("V-HACD is not available. Skipping convex decomposition.")
+        else:
+            decomp_success = decompose_convex(filename, work_dir)
+    else:
+        logging.info("Skipping convex decomposition.")
 
     # Read the MTL file from the OBJ file.
     with open(filename, "r") as f:
@@ -118,7 +174,6 @@ def process_obj(filename: Path, save_mtl: bool, save_mjcf: bool) -> None:
 
     logging.info("Grouping and saving submeshes by material...")
     for i, geom in enumerate(mesh.geometry.values()):
-        # geom.apply_transform(_ROTM)
         savename = str(work_dir / f"{filename.stem}_{i}.obj")
         logging.info(f"\tSaving submesh {savename}")
         geom.export(savename, include_texture=True, header=None)
@@ -183,8 +238,8 @@ def process_obj(filename: Path, save_mtl: bool, save_mjcf: bool) -> None:
                 )
         # Add bodies.
         obj_body = model.worldbody.add("body", name=filename.stem)
-        for i, (name, geom) in enumerate(mesh.geometry.items()):
-            meshname = work_dir / f"{filename.stem}_{i}.obj"
+        if isinstance(mesh, trimesh.base.Trimesh):
+            meshname = work_dir / f"{filename.stem}.obj"
             model.asset.add(
                 "mesh",
                 name=str(meshname.stem),
@@ -193,9 +248,66 @@ def process_obj(filename: Path, save_mtl: bool, save_mjcf: bool) -> None:
             obj_body.add(
                 "geom",
                 type="mesh",
-                mesh=str(meshname.stem),
-                material=name,
+                file=str(work_dir / f"{filename.stem}.obj"),
+                material=filename.stem,
             )
+        else:
+            for i, (name, geom) in enumerate(mesh.geometry.items()):
+                meshname = work_dir / f"{filename.stem}_{i}.obj"
+                model.asset.add(
+                    "mesh",
+                    name=str(meshname.stem),
+                    file=str(meshname),
+                )
+                obj_body.add(
+                    "geom",
+                    type="mesh",
+                    mesh=str(meshname.stem),
+                    material=name,
+                    contype="0",
+                    conaffinity="0",
+                    group="2",
+                )
+        if decomp_success:
+            # Find collision files from the decomposed convex hulls.
+            collisions = [
+                x
+                for x in work_dir.glob("**/*")
+                if x.is_file() and "collision" in x.name
+            ]
+            for collision in collisions:
+                model.asset.add(
+                    "mesh",
+                    name=str(collision.stem),
+                    file=str(collision),
+                )
+                obj_body.add(
+                    "geom",
+                    type="mesh",
+                    mesh=str(collision.stem),
+                    group="3",
+                )
+        else:
+            # If no decomposed convex hulls were created, use the original mesh as
+            # the collision mesh.
+            # This isn't ideal as the convex hull will be a very bad approximation for
+            # some meshes.
+            if isinstance(mesh, trimesh.base.Trimesh):
+                obj_body.add(
+                    "geom",
+                    type="mesh",
+                    mesh=str(meshname.stem),
+                    group="3",
+                )
+            else:
+                for i, (name, geom) in enumerate(mesh.geometry.items()):
+                    obj_body.add(
+                        "geom",
+                        type="mesh",
+                        mesh=str(meshname.stem),
+                        group="3",
+                    )
+
         # Dump.
         mjcf_dir = work_dir / "mjcf"
         mjcf_dir.mkdir(exist_ok=True)
