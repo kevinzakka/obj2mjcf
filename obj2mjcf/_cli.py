@@ -34,17 +34,19 @@ def decompose_convex(filename: Path, work_dir: Path, use_vhacd: bool) -> bool:
         )
         return False
 
-    logging.info(f"Decomposing {filename}")
+    obj_file = filename.resolve()
+    logging.info(f"Decomposing {obj_file}")
 
     with tempfile.TemporaryDirectory() as tmpdirname:
         prev_dir = os.getcwd()
         os.chdir(tmpdirname)
 
-        shutil.copy(filename, tmpdirname)
+        # Copy the obj file to the temporary directory.
+        shutil.copy(obj_file, tmpdirname)
 
         # Call V-HACD, suppressing output.
         ret = subprocess.run(
-            [f"{_VHACD_EXECUTABLE}", filename.name, "-o", "obj"],
+            [f"{_VHACD_EXECUTABLE}", obj_file.name, "-o", "obj"],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.STDOUT,
             check=True,
@@ -54,17 +56,19 @@ def decompose_convex(filename: Path, work_dir: Path, use_vhacd: bool) -> bool:
             return False
 
         # Remove the original obj file and the V-HACD output files.
-        for name in _VHACD_OUTPUTS + [filename.name]:
-            (Path(tmpdirname) / name).unlink()
+        for name in _VHACD_OUTPUTS + [obj_file.name]:
+            file_to_delete = Path(tmpdirname) / name
+            if file_to_delete.exists():
+                file_to_delete.unlink()
 
         os.chdir(prev_dir)
 
-        # Get list of sorted collision files.
+        # Get list of sorted collisions.
         collisions = list(Path(tmpdirname).glob("*.obj"))
         collisions.sort(key=lambda x: x.stem)
 
         for i, filename in enumerate(collisions):
-            savename = str(work_dir / f"{filename.stem}_collision_{i}.obj")
+            savename = str(work_dir / f"{obj_file.stem}_collision_{i}.obj")
             shutil.move(str(filename), savename)
 
     return True
@@ -75,11 +79,11 @@ def process_obj(
 ) -> None:
     # Create a directory with the same name as the OBJ file. The processed submeshes
     # and materials will be stored in this directory.
-    work_dir = (filename.parent / filename.stem).resolve()
+    work_dir = filename.parent / filename.stem
     if work_dir.exists():
         raise RuntimeError(
-            f"{work_dir} already exists, maybe from a previous run? Please remove it "
-            "and try again."
+            f"{work_dir.resolve()} already exists, maybe from a previous run? "
+            "Please remove it and try again."
         )
     work_dir.mkdir(exist_ok=True)
     logging.info(f"Saving processed meshes to {work_dir}")
