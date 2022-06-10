@@ -39,9 +39,11 @@ def decompose_convex(filename: Path, work_dir: Path, use_vhacd: bool) -> bool:
         prev_dir = os.getcwd()
         os.chdir(tmpdirname)
 
+        shutil.copy(obj_file, tmpdirname)
+
         # Call V-HACD, suppressing output.
         ret = subprocess.run(
-            [f"{_VHACD_EXECUTABLE}", obj_file],
+            [f"{_VHACD_EXECUTABLE}", filename.name, "-o", "obj"],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.STDOUT,
             check=True,
@@ -50,21 +52,18 @@ def decompose_convex(filename: Path, work_dir: Path, use_vhacd: bool) -> bool:
             logging.error(f"V-HACD failed on {filename}.")
             return False
 
-        # V-HACD saves 2 files to the current directory: decomp.stl and decomp.obj.
-        # decomp.stl holds the convex hull of the mesh. We don't need it.
-        # decomp.obj holds the convex approximation.
-        convex_filename = Path(tmpdirname) / "decomp.obj"
-        mesh = trimesh.load(convex_filename, split_object=True, process=False)
-
         os.chdir(prev_dir)
 
-        if isinstance(mesh, trimesh.base.Trimesh):
-            savename = str(work_dir / f"{filename.stem}_collision.obj")
-            mesh.export(savename, include_texture=False, header=None)
-        else:
-            for i, geom in enumerate(mesh.geometry.values()):
-                savename = str(work_dir / f"{filename.stem}_collision_{i}.obj")
-                geom.export(savename, include_texture=False, header=None)
+        # Get list of collisions.
+        collisions = list(Path(tmpdirname).glob("*.obj"))
+        collisions.sort(key=lambda x: x.stem)
+
+        # Remove the original obj file.
+        collisions.pop(0)
+
+        for i, filename in enumerate(collisions):
+            savename = str(work_dir / f"{obj_file.stem}_collision_{i}.obj")
+            shutil.move(str(filename), savename)
 
     return True
 
@@ -253,6 +252,7 @@ def process_obj(
                 for x in work_dir.glob("**/*")
                 if x.is_file() and "collision" in x.name
             ]
+            collisions.sort(key=lambda x: int(x.stem.split("_")[-1]))
             for collision in collisions:
                 model.asset.add(
                     "mesh",
