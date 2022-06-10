@@ -20,13 +20,12 @@ from PIL import Image
 # their `convex_decomposition` function.
 # TODO(kevin): Is there a way to assert that the V-HACD version is 4.0?
 _VHACD_EXECUTABLE = find_executable("testVHACD", path=os.environ["PATH"])
+
 # Names of the V-HACD output files.
 _VHACD_OUTPUTS = ["decomp.obj", "decomp.stl"]
 
 
 class FillMode(enum.Enum):
-    """Enum for specifying how to fill in gaps in the mesh."""
-
     FLOOD = enum.auto()
     SURFACE = enum.auto()
     RAYCAST = enum.auto()
@@ -34,47 +33,42 @@ class FillMode(enum.Enum):
 
 @dataclass(frozen=True)
 class VhacdArgs:
-    """V-HACD specific arguments."""
-
-    max_output_convex_hulls: int = 32
-    """Maximum number of output convex hulls."""
-    voxel_resolution: int = 100_000
-    """Total number of voxels to use."""
+    max_output_convex_hulls: int = 64
+    """maximum number of output convex hulls"""
+    voxel_resolution: int = 400_000
+    """total number of voxels to use"""
     volume_error_percent: float = 1.0
-    """Volume error allowed as a percentage."""
-    max_recursion_depth: int = 12
-    """Maximum recursion depth."""
-    shrink_wrap: bool = True
-    """Whether or not to shrinkwrap output to source mesh."""
+    """volume error allowed as a percentage"""
+    max_recursion_depth: int = 14
+    """maximum recursion depth"""
+    disable_shrink_wrap: bool = False
+    """do not shrink wrap output to source mesh"""
     fill_mode: FillMode = FillMode.FLOOD
-    """Fill mode."""
+    """fill mode"""
     max_hull_vert_count: int = 64
-    """Maximum number of vertices in the output convex hull."""
-    run_async: bool = True
-    """Whether or not to run asynchronously."""
+    """maximum number of vertices in the output convex hull"""
+    disable_async: bool = False
+    """do not run asynchronously"""
     min_edge_length: int = 2
-    """Minimum size of a voxel edge."""
+    """minimum size of a voxel edge"""
     split_hull: bool = False
-    """If false, splits hulls in the middle. If true, tries to find optimal split plane
-    location."""
+    """try to find optimal split plane location"""
 
 
 @dataclass(frozen=True)
 class Args:
-    """obj2mjcf arguments."""
-
     obj_dir: str
-    """Path to a directory containing obj files."""
+    """path to a directory containing obj files"""
     use_vhacd: bool = False
-    """Whether to create a convex decomposition for the collision geom."""
+    """create a convex decomposition for the collision geom"""
     save_mtl: bool = False
-    """Whether to save the mtl files."""
+    """save the mtl files"""
     save_mjcf: bool = False
-    """Whether to save an example MJCF file."""
+    """save an example MJCF file"""
     verbose: bool = False
-    """Whether to print verbose output."""
+    """print verbose output"""
     vhacd_args: VhacdArgs = field(default_factory=VhacdArgs)
-    """Arguments to pass to VHACD."""
+    """arguments to pass to V-HACD"""
 
 
 def decompose_convex(
@@ -116,13 +110,13 @@ def decompose_convex(
                 "-d",
                 f"{vhacd_args.max_recursion_depth}",
                 "-s",
-                f"{int(vhacd_args.shrink_wrap)}",
+                f"{int(not vhacd_args.disable_shrink_wrap)}",
                 "-f",
                 f"{vhacd_args.fill_mode.name.lower()}",
                 "-v",
                 f"{vhacd_args.max_hull_vert_count}",
                 "-a",
-                f"{int(vhacd_args.run_async)}",
+                f"{int(not vhacd_args.disable_async)}",
                 "-l",
                 f"{vhacd_args.min_edge_length}",
                 "-p",
@@ -400,7 +394,3 @@ def main() -> None:
 
     for obj_file in tqdm.tqdm(obj_files):
         process_obj(obj_file, args)
-
-
-if __name__ == "__main__":
-    main()

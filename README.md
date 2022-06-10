@@ -32,43 +32,40 @@ If you additionally install [V-HACD 4.0](https://github.com/kmammou/v-hacd), thi
 ```bash
 usage: obj2mjcf [-h] --obj-dir STR [--use-vhacd] [--save-mtl] [--save-mjcf] [--verbose] [--vhacd-args.max-output-convex-hulls INT]
                 [--vhacd-args.voxel-resolution INT] [--vhacd-args.volume-error-percent FLOAT] [--vhacd-args.max-recursion-depth INT]
-                [--vhacd-args.no-shrink-wrap] [--vhacd-args.fill-mode {FLOOD,SURFACE,RAYCAST}] [--vhacd-args.max-hull-vert-count INT]
-                [--vhacd-args.no-run-async] [--vhacd-args.min-edge-length INT] [--vhacd-args.split-hull]
-
-obj2mjcf arguments.
+                [--vhacd-args.disable-shrink-wrap] [--vhacd-args.fill-mode {FLOOD,SURFACE,RAYCAST}] [--vhacd-args.max-hull-vert-count INT]
+                [--vhacd-args.disable-async] [--vhacd-args.min-edge-length INT] [--vhacd-args.split-hull]
 
 required arguments:
-  --obj-dir STR         Path to a directory containing obj files.
+  --obj-dir STR         path to a directory containing obj files
 
 optional arguments:
   -h, --help            show this help message and exit
-  --use-vhacd           Whether to create a convex decomposition for the collision geom.
-  --save-mtl            Whether to save the mtl files.
-  --save-mjcf           Whether to save an example MJCF file.
-  --verbose             Whether to print verbose output.
+  --use-vhacd           create a convex decomposition for the collision geom
+  --save-mtl            save the mtl files
+  --save-mjcf           save an example MJCF file
+  --verbose             print verbose output
 
 optional vhacd args arguments:
-  Arguments to pass to VHACD.
+  arguments to pass to V-HACD
 
   --vhacd-args.max-output-convex-hulls INT
-                        Maximum number of output convex hulls. (default: 32)
+                        maximum number of output convex hulls (default: 64)
   --vhacd-args.voxel-resolution INT
-                        Total number of voxels to use. (default: 100000)
+                        total number of voxels to use (default: 400000)
   --vhacd-args.volume-error-percent FLOAT
-                        Volume error allowed as a percentage. (default: 1.0)
+                        volume error allowed as a percentage (default: 1.0)
   --vhacd-args.max-recursion-depth INT
-                        Maximum recursion depth. (default: 12)
-  --vhacd-args.no-shrink-wrap
-                        Whether or not to shrinkwrap output to source mesh.
+                        maximum recursion depth (default: 14)
+  --vhacd-args.disable-shrink-wrap
+                        do not shrink wrap output to source mesh
   --vhacd-args.fill-mode {FLOOD,SURFACE,RAYCAST}
-                        Fill mode. (default: FLOOD)
+                        fill mode (default: FLOOD)
   --vhacd-args.max-hull-vert-count INT
-                        Maximum number of vertices in the output convex hull. (default: 64)
-  --vhacd-args.no-run-async
-                        Whether or not to run asynchronously.
+                        maximum number of vertices in the output convex hull (default: 64)
+  --vhacd-args.disable-async
+                        do not run asynchronously
   --vhacd-args.min-edge-length INT
-                        Minimum size of a voxel edge. (default: 2)
+                        minimum size of a voxel edge (default: 2)
   --vhacd-args.split-hull
-                        If false, splits hulls in the middle. If true, tries to find optimal split plane
-                        location.
+                        try to find optimal split plane location
 ```
