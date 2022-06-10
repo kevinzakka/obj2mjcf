@@ -10,11 +10,15 @@ Currently, MuJoCo does not support OBJ files with groups or objects (i.e., `o` o
 
 ## Installation
 
+The recommended way to install this package is via [PyPI](https://pypi.org/project/obj2mjcf/):
+
 ```bash
 pip install obj2mjcf
 ```
 
 If you additionally install [V-HACD 4.0](https://github.com/kmammou/v-hacd), this tool will create a convex decomposition of the mesh to use as the collision geometry.
+
+<img src="assets/convex_collision.png" height="200"/>
 
 ## Usage
 
