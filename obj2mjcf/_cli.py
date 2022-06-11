@@ -1,6 +1,7 @@
 import enum
 import logging
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -33,6 +34,8 @@ class FillMode(enum.Enum):
 
 @dataclass(frozen=True)
 class VhacdArgs:
+    enable: bool = False
+    """enable convex decomposition using V-HACD"""
     max_output_convex_hulls: int = 64
     """maximum number of output convex hulls"""
     voxel_resolution: int = 400_000
@@ -58,9 +61,10 @@ class VhacdArgs:
 @dataclass(frozen=True)
 class Args:
     obj_dir: str
-    """path to a directory containing obj files"""
-    use_vhacd: bool = False
-    """create a convex decomposition for the collision geom"""
+    """path to a directory containing obj files. All obj files in the directory will be
+    converted"""
+    obj_filter: Optional[str] = None
+    """only convert obj files matching this regex"""
     save_mtl: bool = False
     """save the mtl files"""
     save_mjcf: bool = False
@@ -71,17 +75,12 @@ class Args:
     """arguments to pass to V-HACD"""
 
 
-def decompose_convex(
-    filename: Path, work_dir: Path, use_vhacd: bool, vhacd_args: VhacdArgs
-) -> bool:
-    if not use_vhacd:
+def decompose_convex(filename: Path, work_dir: Path, vhacd_args: VhacdArgs) -> bool:
+    if not vhacd_args.enable:
         return False
 
     if _VHACD_EXECUTABLE is None:
-        logging.info(
-            "`use_vhacd` was set but V-HACD was not found in the system path. "
-            "Skipping convex decomposition."
-        )
+        logging.info("`V-HACD was enabled but not found in the system path, skipping.")
         return False
 
     obj_file = filename.resolve()
@@ -162,9 +161,7 @@ def process_obj(filename: Path, args: Args) -> None:
     logging.info(f"Saving processed meshes to {work_dir}")
 
     # Decompose the mesh into convex pieces if V-HACD is available.
-    decomp_success = decompose_convex(
-        filename, work_dir, args.use_vhacd, args.vhacd_args
-    )
+    decomp_success = decompose_convex(filename, work_dir, args.vhacd_args)
 
     # Read the MTL file from the OBJ file.
     with open(filename, "r") as f:
@@ -390,7 +387,13 @@ def main() -> None:
 
     # Get all obj files in the directory.
     obj_files = list(Path(args.obj_dir).glob("*.obj"))
-    logging.info(f"Found {len(obj_files)} obj files.")
 
-    for obj_file in tqdm.tqdm(obj_files):
+    # Filter out the ones that don't match the regex filter.
+    if args.obj_filter is not None:
+        obj_files = [
+            x for x in obj_files if re.search(args.obj_filter, x.name) is not None
+        ]
+    logging.info(f"Processing {len(obj_files)} obj files.")
+
+    for obj_file in tqdm.tqdm(obj_files, disable=args.verbose):
         process_obj(obj_file, args)

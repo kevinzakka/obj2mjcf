@@ -36,17 +36,19 @@ We also recommend installing [V-HACD v4.0](https://github.com/kmammou/v-hacd). I
 ## Usage
 
 ```bash
-usage: obj2mjcf [-h] --obj-dir STR [--use-vhacd] [--save-mtl] [--save-mjcf] [--verbose] [--vhacd-args.max-output-convex-hulls INT]
-                [--vhacd-args.voxel-resolution INT] [--vhacd-args.volume-error-percent FLOAT] [--vhacd-args.max-recursion-depth INT]
-                [--vhacd-args.disable-shrink-wrap] [--vhacd-args.fill-mode {FLOOD,SURFACE,RAYCAST}] [--vhacd-args.max-hull-vert-count INT]
-                [--vhacd-args.disable-async] [--vhacd-args.min-edge-length INT] [--vhacd-args.split-hull]
+usage: obj2mjcf [-h] --obj-dir STR [--obj-filter STR] [--save-mtl] [--save-mjcf] [--verbose] [--vhacd-args.enable]
+                [--vhacd-args.max-output-convex-hulls INT] [--vhacd-args.voxel-resolution INT] [--vhacd-args.volume-error-percent FLOAT]
+                [--vhacd-args.max-recursion-depth INT] [--vhacd-args.disable-shrink-wrap] [--vhacd-args.fill-mode {FLOOD,SURFACE,RAYCAST}]
+                [--vhacd-args.max-hull-vert-count INT] [--vhacd-args.disable-async] [--vhacd-args.min-edge-length INT]
+                [--vhacd-args.split-hull]
 
 required arguments:
-  --obj-dir STR         path to a directory containing obj files
+  --obj-dir STR         path to a directory containing obj files. All obj files in the directory will be
+                        converted
 
 optional arguments:
   -h, --help            show this help message and exit
-  --use-vhacd           create a convex decomposition for the collision geom
+  --obj-filter STR      only convert obj files matching this regex (default: None)
   --save-mtl            save the mtl files
   --save-mjcf           save an example MJCF file
   --verbose             print verbose output
@@ -54,6 +56,7 @@ optional arguments:
 optional vhacd args arguments:
   arguments to pass to V-HACD
 
+  --vhacd-args.enable   enable convex decomposition using V-HACD
   --vhacd-args.max-output-convex-hulls INT
                         maximum number of output convex hulls (default: 64)
   --vhacd-args.voxel-resolution INT
