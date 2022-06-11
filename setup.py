@@ -46,7 +46,7 @@ author = "Kevin Zakka"
 
 author_email = "kevinarmandzakka@gmail.com"
 
-description = "A tool for converting Wavefront OBJ files to multiple MuJoCo meshes grouped by material."
+description = "A CLI for processing Wavefront OBJ files into a MuJoCo-conducive format"
 
 
 setup(

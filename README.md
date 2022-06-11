@@ -7,25 +7,31 @@
 [pypi-badge]: https://badge.fury.io/py/obj2mjcf.svg
 [pypi]: https://pypi.org/project/obj2mjcf/
 
-A tool for converting Wavefront OBJ files to multiple MuJoCo meshes grouped by material.
+`obj2mjcf` is a CLI for processing Wavefront [OBJ] files into a [MuJoCo]-conducive format. It automatically:
 
-Currently, MuJoCo does not support OBJ files with groups or objects (i.e., `o` or `g`). Furthermore, only 1 material can be assigned per mesh. This tool is designed to split such OBJ files into sub-meshes grouped by material. The resulting sub-meshes can then be used as a drop-in replacement for the original OBJ file. The result is vastly enhanced visuals for your model:
+* Splits an OBJ file into sub-meshes that are grouped by the materials referenced in the OBJ's MTL file
+* Creates a collision mesh by performing a convex decomposition of the OBJ with [V-HACD]
+* Generates an MJCF XML file that is pre-filled with materials, meshes and geom elements referencing these OBJ files
+
+The generated meshes can then be used as a drop-in replacement for the original OBJ file. The result is vastly enhanced visuals for your model:
 
 | Before | After |
 |--------|-------|
-|<img src="https://raw.githubusercontent.com/kevinzakka/obj2mjcf/main/assets/before.png" height="200"/>|<img src="https://raw.githubusercontent.com/kevinzakka/obj2mjcf/main/assets/after.png" height="200"/>|
+|<img src="https://raw.githubusercontent.com/kevinzakka/obj2mjcf/main/assets/before.png" width="400"/>|<img src="https://raw.githubusercontent.com/kevinzakka/obj2mjcf/main/assets/after.png" width="400"/>|
+
+## Motivation
+
+As of June 2022, MuJoCo does not support OBJ files consisting of groups or objects (`o` or `g` tags) and only 1 material can be assigned per mesh. This means that you have to manually split your OBJ file into sub-meshes, a process that is tedious and error-prone. This tool is meant to automate this process.
 
 ## Installation
 
 The recommended way to install this package is via [PyPI](https://pypi.org/project/obj2mjcf/):
 
 ```bash
-pip install obj2mjcf
+pip install --upgrade obj2mjcf
 ```
 
-If you additionally install [V-HACD 4.0](https://github.com/kmammou/v-hacd), this tool will create a convex decomposition of the mesh to use as the collision geometry.
-
-<img src="https://raw.githubusercontent.com/kevinzakka/obj2mjcf/main/assets/convex_collision.png" height="200"/>
+We also recommend installing [V-HACD v4.0](https://github.com/kmammou/v-hacd). If available, `obj2mjcf` will leverage it to create better collision geometry for your OBJ file.
 
 ## Usage
 
@@ -69,3 +75,7 @@ optional vhacd args arguments:
   --vhacd-args.split-hull
                         try to find optimal split plane location
 ```
+
+[OBJ]: https://en.wikipedia.org/wiki/Wavefront_.obj_file
+[MuJoCo]: https://github.com/deepmind/mujoco
+[V-HACD]: https://github.com/kmammou/v-hacd
