@@ -31,7 +31,14 @@ The recommended way to install this package is via [PyPI](https://pypi.org/proje
 pip install --upgrade obj2mjcf
 ```
 
-We also recommend installing [V-HACD v4.0](https://github.com/kmammou/v-hacd). If available, `obj2mjcf` will leverage it to create better collision geometry for your OBJ file.
+### Extra: V-HACD 4.0
+
+We recommend installing [V-HACD v4.0](https://github.com/kmammou/v-hacd). If available, `obj2mjcf` will leverage it to create better collision geometry for your OBJ file.
+
+```bash
+# For macOS and Linux.
+bash install_vhacd.sh
+```
 
 ## Usage
 

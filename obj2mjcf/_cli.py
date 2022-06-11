@@ -80,7 +80,7 @@ def decompose_convex(filename: Path, work_dir: Path, vhacd_args: VhacdArgs) -> b
         return False
 
     if _VHACD_EXECUTABLE is None:
-        logging.info("`V-HACD was enabled but not found in the system path, skipping.")
+        logging.info("V-HACD was enabled but not found in the system path, skipping.")
         return False
 
     obj_file = filename.resolve()
