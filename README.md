@@ -43,11 +43,9 @@ bash install_vhacd.sh
 ## Usage
 
 ```bash
-usage: obj2mjcf [-h] --obj-dir STR [--obj-filter STR] [--save-mtl] [--save-mjcf] [--verbose] [--vhacd-args.enable]
-                [--vhacd-args.max-output-convex-hulls INT] [--vhacd-args.voxel-resolution INT] [--vhacd-args.volume-error-percent FLOAT]
-                [--vhacd-args.max-recursion-depth INT] [--vhacd-args.disable-shrink-wrap] [--vhacd-args.fill-mode {FLOOD,SURFACE,RAYCAST}]
-                [--vhacd-args.max-hull-vert-count INT] [--vhacd-args.disable-async] [--vhacd-args.min-edge-length INT]
-                [--vhacd-args.split-hull]
+usage: obj2mjcf [-h] --obj-dir STR [--obj-filter STR] [--save-mtl] [--save-mjcf] [--compile-model] [--verbose] [--vhacd-args.enable] [--vhacd-args.max-output-convex-hulls INT] [--vhacd-args.voxel-resolution INT]
+                [--vhacd-args.volume-error-percent FLOAT] [--vhacd-args.max-recursion-depth INT] [--vhacd-args.disable-shrink-wrap] [--vhacd-args.fill-mode {FLOOD,SURFACE,RAYCAST}] [--vhacd-args.max-hull-vert-count INT]
+                [--vhacd-args.disable-async] [--vhacd-args.min-edge-length INT] [--vhacd-args.split-hull]
 
 required arguments:
   --obj-dir STR         path to a directory containing obj files. All obj files in the directory will be
@@ -58,6 +56,7 @@ optional arguments:
   --obj-filter STR      only convert obj files matching this regex (default: None)
   --save-mtl            save the mtl files
   --save-mjcf           save an example MJCF file
+  --compile-model       compile the MJCF file to check for errors
   --verbose             print verbose output
 
 optional vhacd args arguments:
@@ -65,9 +64,9 @@ optional vhacd args arguments:
 
   --vhacd-args.enable   enable convex decomposition using V-HACD
   --vhacd-args.max-output-convex-hulls INT
-                        maximum number of output convex hulls (default: 64)
+                        maximum number of output convex hulls (default: 32)
   --vhacd-args.voxel-resolution INT
-                        total number of voxels to use (default: 400000)
+                        total number of voxels to use (default: 100000)
   --vhacd-args.volume-error-percent FLOAT
                         volume error allowed as a percentage (default: 1.0)
   --vhacd-args.max-recursion-depth INT
