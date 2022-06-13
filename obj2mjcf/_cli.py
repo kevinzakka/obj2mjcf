@@ -36,9 +36,9 @@ class FillMode(enum.Enum):
 class VhacdArgs:
     enable: bool = False
     """enable convex decomposition using V-HACD"""
-    max_output_convex_hulls: int = 64
+    max_output_convex_hulls: int = 32
     """maximum number of output convex hulls"""
-    voxel_resolution: int = 400_000
+    voxel_resolution: int = 100_000
     """total number of voxels to use"""
     volume_error_percent: float = 1.0
     """volume error allowed as a percentage"""
@@ -69,6 +69,8 @@ class Args:
     """save the mtl files"""
     save_mjcf: bool = False
     """save an example MJCF file"""
+    compile_model: bool = False
+    """compile the MJCF file to check for errors"""
     verbose: bool = False
     """print verbose output"""
     vhacd_args: VhacdArgs = field(default_factory=VhacdArgs)
@@ -368,6 +370,14 @@ def process_obj(filename: Path, args: Args) -> None:
                         mesh=str(meshname.stem),
                         group="3",
                     )
+
+        # Compile and step the physics to check for any errors.
+        if args.compile_model:
+            try:
+                physics = mjcf.Physics.from_mjcf_model(model)
+                physics.step()
+            except Exception as e:
+                logging.error(f"\tError compiling MJCF: {e}")
 
         # Dump.
         mjcf_dir = work_dir / "mjcf"
