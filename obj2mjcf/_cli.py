@@ -20,7 +20,7 @@ from PIL import Image
 # Note trimesh has not updated their code to work with v4.0 which is why we do not use
 # their `convex_decomposition` function.
 # TODO(kevin): Is there a way to assert that the V-HACD version is 4.0?
-_VHACD_EXECUTABLE = find_executable("testVHACD", path=os.environ["PATH"])
+_VHACD_EXECUTABLE = find_executable("TestVHACD", path=os.environ["PATH"])
 
 # Names of the V-HACD output files.
 _VHACD_OUTPUTS = ["decomp.obj", "decomp.stl"]
