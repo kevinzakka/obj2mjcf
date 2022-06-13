@@ -231,14 +231,14 @@ def process_obj(filename: Path, args: Args) -> None:
     if isinstance(mesh, trimesh.base.Trimesh):
         # No submeshes, just save the mesh.
         savename = str(work_dir / f"{filename.stem}.obj")
+        logging.info(f"\tSaving mesh {savename}")
         mesh.export(savename, include_texture=True, header=None)
-        return
-
-    logging.info("Grouping and saving submeshes by material...")
-    for i, geom in enumerate(mesh.geometry.values()):
-        savename = str(work_dir / f"{filename.stem}_{i}.obj")
-        logging.info(f"\tSaving submesh {savename}")
-        geom.export(savename, include_texture=True, header=None)
+    else:
+        logging.info("Grouping and saving submeshes by material...")
+        for i, geom in enumerate(mesh.geometry.values()):
+            savename = str(work_dir / f"{filename.stem}_{i}.obj")
+            logging.info(f"\tSaving submesh {savename}")
+            geom.export(savename, include_texture=True, header=None)
 
     # Delete any MTL files that were created during trimesh processing, if any.
     for file in [
@@ -309,8 +309,11 @@ def process_obj(filename: Path, args: Args) -> None:
             obj_body.add(
                 "geom",
                 type="mesh",
-                file=str(work_dir / f"{filename.stem}.obj"),
-                material=filename.stem,
+                mesh=str(meshname.stem),
+                material=material.name,
+                contype="0",
+                conaffinity="0",
+                group="2",
             )
         else:
             for i, (name, geom) in enumerate(mesh.geometry.items()):
