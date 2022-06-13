@@ -6,7 +6,6 @@ import shutil
 import subprocess
 import tempfile
 from dataclasses import dataclass, field
-from distutils.spawn import find_executable
 from pathlib import Path
 from typing import List, Optional
 
@@ -20,7 +19,7 @@ from PIL import Image
 # Note trimesh has not updated their code to work with v4.0 which is why we do not use
 # their `convex_decomposition` function.
 # TODO(kevin): Is there a way to assert that the V-HACD version is 4.0?
-_VHACD_EXECUTABLE = find_executable("TestVHACD", path=os.environ["PATH"])
+_VHACD_EXECUTABLE = shutil.which("TestVHACD")
 
 # Names of the V-HACD output files.
 _VHACD_OUTPUTS = ["decomp.obj", "decomp.stl"]
