@@ -73,7 +73,7 @@ class Args:
     save_mjcf: bool = False
     """save an example XML (MJCF) file"""
     compile_model: bool = False
-    """compile the MJCF file to check for errors"""
+    """compile the MJCF file to check for errors. only valid if save_mjcf is True"""
     verbose: bool = False
     """print verbose output"""
     vhacd_args: VhacdArgs = field(default_factory=VhacdArgs)
@@ -234,13 +234,13 @@ def process_obj(filename: Path, args: Args) -> None:
     if isinstance(mesh, trimesh.base.Trimesh):
         # No submeshes, just save the mesh.
         savename = str(work_dir / f"{filename.stem}.obj")
-        logging.info(f"\tSaving mesh {savename}")
+        logging.info(f"Saving mesh {savename}")
         mesh.export(savename, include_texture=True, header=None)
     else:
         logging.info("Grouping and saving submeshes by material...")
         for i, geom in enumerate(mesh.geometry.values()):
             savename = str(work_dir / f"{filename.stem}_{i}.obj")
-            logging.info(f"\tSaving submesh {savename}")
+            logging.info(f"Saving submesh {savename}")
             geom.export(savename, include_texture=True, header=None)
 
     # Delete any MTL files that were created during trimesh processing, if any.
@@ -406,7 +406,7 @@ def process_obj(filename: Path, args: Args) -> None:
                 data = mujoco.MjData(model)
                 mujoco.mj_step(model, data)
             except Exception as e:
-                logging.error(f"\tError compiling MJCF: {e}")
+                logging.error(f"Error compiling MJCF: {e}")
 
 
 def main() -> None:
