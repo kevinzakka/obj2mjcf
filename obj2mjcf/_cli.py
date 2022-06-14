@@ -73,7 +73,7 @@ class Args:
     save_mjcf: bool = False
     """save an example XML (MJCF) file"""
     compile_model: bool = False
-    """compile the MJCF file to check for errors. only valid if save_mjcf is True"""
+    """compile the MJCF file to check for errors"""
     verbose: bool = False
     """print verbose output"""
     vhacd_args: VhacdArgs = field(default_factory=VhacdArgs)
@@ -137,8 +137,7 @@ def decompose_convex(filename: Path, work_dir: Path, vhacd_args: VhacdArgs) -> b
         # Remove the original obj file and the V-HACD output files.
         for name in _VHACD_OUTPUTS + [obj_file.name]:
             file_to_delete = Path(tmpdirname) / name
-            if file_to_delete.exists():
-                file_to_delete.unlink()
+            file_to_delete.unlink(missing_ok=True)
 
         os.chdir(prev_dir)
 
@@ -275,43 +274,61 @@ def process_obj(filename: Path, args: Args) -> None:
             with open(savename, "w") as f:
                 f.write("".join(lines))
 
-    # Save an MJCF example file.
-    if args.save_mjcf:
-        root = etree.Element("mujoco", model=filename.stem)
-        asset_elem = etree.SubElement(root, "asset")
+    # Build an MJCF.
+    root = etree.Element("mujoco", model=filename.stem)
+    asset_elem = etree.SubElement(root, "asset")
 
-        # Add assets.
-        for material in mtls:
-            if material.texture is not None:
-                etree.SubElement(
-                    asset_elem,
-                    "texture",
-                    type="2d",
-                    name=str(Path(material.texture).stem),
-                    file=str(material.texture),
-                )
-                etree.SubElement(
-                    asset_elem,
-                    "material",
-                    name=material.name,
-                    texture=str(Path(material.texture).stem),
-                    specular="1",
-                    shininess="1",
-                )
-            else:
-                etree.SubElement(
-                    asset_elem,
-                    "material",
-                    name=material.name,
-                    rgba=material.diffuse + " 1.0",
-                )
+    # Add assets.
+    for material in mtls:
+        if material.texture is not None:
+            etree.SubElement(
+                asset_elem,
+                "texture",
+                type="2d",
+                name=str(Path(material.texture).stem),
+                file=str(material.texture),
+            )
+            etree.SubElement(
+                asset_elem,
+                "material",
+                name=material.name,
+                texture=str(Path(material.texture).stem),
+                specular="1",
+                shininess="1",
+            )
+        else:
+            etree.SubElement(
+                asset_elem,
+                "material",
+                name=material.name,
+                rgba=material.diffuse + " 1.0",
+            )
 
-        worldbody_elem = etree.SubElement(root, "worldbody")
+    worldbody_elem = etree.SubElement(root, "worldbody")
 
-        # Add visual geoms.
-        obj_body = etree.SubElement(worldbody_elem, "body", name=filename.stem)
-        if isinstance(mesh, trimesh.base.Trimesh):
-            meshname = Path(f"{filename.stem}.obj")
+    # Add visual geoms.
+    obj_body = etree.SubElement(worldbody_elem, "body", name=filename.stem)
+    if isinstance(mesh, trimesh.base.Trimesh):
+        meshname = Path(f"{filename.stem}.obj")
+        etree.SubElement(
+            asset_elem,
+            "mesh",
+            name=str(meshname.stem),
+            file=str(meshname),
+        )
+        etree.SubElement(
+            obj_body,
+            "geom",
+            type="mesh",
+            mesh=str(meshname.stem),
+            material=material.name,
+            contype="0",
+            conaffinity="0",
+            group="2",
+        )
+    else:
+        for i, (name, geom) in enumerate(mesh.geometry.items()):
+            meshname = Path(f"{filename.stem}_{i}.obj")
             etree.SubElement(
                 asset_elem,
                 "mesh",
@@ -323,59 +340,47 @@ def process_obj(filename: Path, args: Args) -> None:
                 "geom",
                 type="mesh",
                 mesh=str(meshname.stem),
-                material=material.name,
+                material=name,
                 contype="0",
                 conaffinity="0",
                 group="2",
             )
+    # Add collision geoms.
+    if decomp_success:
+        # Find collision files from the decomposed convex hulls.
+        collisions = [
+            x for x in work_dir.glob("**/*") if x.is_file() and "collision" in x.name
+        ]
+        collisions.sort(key=lambda x: int(x.stem.split("_")[-1]))
+        for collision in collisions:
+            etree.SubElement(
+                asset_elem,
+                "mesh",
+                name=str(collision.stem),
+                file=str(collision.name),
+            )
+            etree.SubElement(
+                obj_body,
+                "geom",
+                type="mesh",
+                mesh=str(collision.stem),
+                group="3",
+            )
+    else:
+        # If no decomposed convex hulls were created, use the original mesh as
+        # the collision mesh.
+        # This isn't ideal as the convex hull will be a very bad approximation for
+        # some meshes.
+        if isinstance(mesh, trimesh.base.Trimesh):
+            etree.SubElement(
+                obj_body,
+                "geom",
+                type="mesh",
+                mesh=str(meshname.stem),
+                group="3",
+            )
         else:
             for i, (name, geom) in enumerate(mesh.geometry.items()):
-                meshname = Path(f"{filename.stem}_{i}.obj")
-                etree.SubElement(
-                    asset_elem,
-                    "mesh",
-                    name=str(meshname.stem),
-                    file=str(meshname),
-                )
-                etree.SubElement(
-                    obj_body,
-                    "geom",
-                    type="mesh",
-                    mesh=str(meshname.stem),
-                    material=name,
-                    contype="0",
-                    conaffinity="0",
-                    group="2",
-                )
-        # Add collision geoms.
-        if decomp_success:
-            # Find collision files from the decomposed convex hulls.
-            collisions = [
-                x
-                for x in work_dir.glob("**/*")
-                if x.is_file() and "collision" in x.name
-            ]
-            collisions.sort(key=lambda x: int(x.stem.split("_")[-1]))
-            for collision in collisions:
-                etree.SubElement(
-                    asset_elem,
-                    "mesh",
-                    name=str(collision.stem),
-                    file=str(collision.name),
-                )
-                etree.SubElement(
-                    obj_body,
-                    "geom",
-                    type="mesh",
-                    mesh=str(collision.stem),
-                    group="3",
-                )
-        else:
-            # If no decomposed convex hulls were created, use the original mesh as
-            # the collision mesh.
-            # This isn't ideal as the convex hull will be a very bad approximation for
-            # some meshes.
-            if isinstance(mesh, trimesh.base.Trimesh):
                 etree.SubElement(
                     obj_body,
                     "geom",
@@ -383,30 +388,29 @@ def process_obj(filename: Path, args: Args) -> None:
                     mesh=str(meshname.stem),
                     group="3",
                 )
-            else:
-                for i, (name, geom) in enumerate(mesh.geometry.items()):
-                    etree.SubElement(
-                        obj_body,
-                        "geom",
-                        type="mesh",
-                        mesh=str(meshname.stem),
-                        group="3",
-                    )
 
-        # Dump.
+    tree = etree.ElementTree(root)
+    etree.indent(tree, space=_XML_INDENTATION, level=0)
+
+    # Compile and step the physics to check for any errors.
+    if args.compile_model:
+        try:
+            tmp_path = work_dir / "tmp.xml"
+            tree.write(tmp_path, encoding="utf-8")
+            model = mujoco.MjModel.from_xml_path(str(tmp_path))
+            data = mujoco.MjData(model)
+            mujoco.mj_step(model, data)
+            logging.info("Model compiled successfully!")
+        except Exception as e:
+            logging.error(f"Error compiling model: {e}")
+        finally:
+            tmp_path.unlink(missing_ok=True)
+
+    # Dump.
+    if args.save_mjcf:
         xml_path = str(work_dir / f"{filename.stem}.xml")
-        tree = etree.ElementTree(root)
-        etree.indent(tree, space=_XML_INDENTATION, level=0)
         tree.write(xml_path, encoding="utf-8")
-
-        # Compile and step the physics to check for any errors.
-        if args.compile_model:
-            try:
-                model = mujoco.MjModel.from_xml_path(xml_path)
-                data = mujoco.MjData(model)
-                mujoco.mj_step(model, data)
-            except Exception as e:
-                logging.error(f"Error compiling MJCF: {e}")
+        logging.info(f"Saved MJCF to {xml_path}")
 
 
 def main() -> None:

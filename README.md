@@ -56,7 +56,7 @@ optional arguments:
   --obj-filter STR      only convert obj files matching this regex (default: None)
   --save-mtl            save the mtl files
   --save-mjcf           save an example XML (MJCF) file
-  --compile-model       compile the MJCF file to check for errors. only valid if save_mjcf is True
+  --compile-model       compile the MJCF file to check for errors
   --verbose             print verbose output
 
 optional vhacd args arguments:
