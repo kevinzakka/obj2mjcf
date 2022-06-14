@@ -10,9 +10,10 @@ from pathlib import Path
 from typing import List, Optional
 
 import dcargs
+import mujoco
 import tqdm
 import trimesh
-from dm_control import mjcf
+from lxml import etree
 from PIL import Image
 
 # Find the V-HACD v4.0 executable in the system path.
@@ -23,6 +24,9 @@ _VHACD_EXECUTABLE = shutil.which("TestVHACD")
 
 # Names of the V-HACD output files.
 _VHACD_OUTPUTS = ["decomp.obj", "decomp.stl"]
+
+# 2-space indentation for the generated XML.
+_XML_INDENTATION = "  "
 
 
 class FillMode(enum.Enum):
@@ -67,7 +71,7 @@ class Args:
     save_mtl: bool = False
     """save the mtl files"""
     save_mjcf: bool = False
-    """save an example MJCF file"""
+    """save an example XML (MJCF) file"""
     compile_model: bool = False
     """compile the MJCF file to check for errors"""
     verbose: bool = False
@@ -273,17 +277,21 @@ def process_obj(filename: Path, args: Args) -> None:
 
     # Save an MJCF example file.
     if args.save_mjcf:
-        model = mjcf.RootElement()
+        root = etree.Element("mujoco", model=filename.stem)
+        asset_elem = etree.SubElement(root, "asset")
+
         # Add assets.
         for material in mtls:
             if material.texture is not None:
-                model.asset.add(
+                etree.SubElement(
+                    asset_elem,
                     "texture",
                     type="2d",
                     name=str(Path(material.texture).stem),
-                    file=str(work_dir / material.texture),
+                    file=str(material.texture),
                 )
-                model.asset.add(
+                etree.SubElement(
+                    asset_elem,
                     "material",
                     name=material.name,
                     texture=str(Path(material.texture).stem),
@@ -291,21 +299,27 @@ def process_obj(filename: Path, args: Args) -> None:
                     shininess="1",
                 )
             else:
-                model.asset.add(
+                etree.SubElement(
+                    asset_elem,
                     "material",
                     name=material.name,
                     rgba=material.diffuse + " 1.0",
                 )
+
+        worldbody_elem = etree.SubElement(root, "worldbody")
+
         # Add visual geoms.
-        obj_body = model.worldbody.add("body", name=filename.stem)
+        obj_body = etree.SubElement(worldbody_elem, "body", name=filename.stem)
         if isinstance(mesh, trimesh.base.Trimesh):
-            meshname = work_dir / f"{filename.stem}.obj"
-            model.asset.add(
+            meshname = Path(f"{filename.stem}.obj")
+            etree.SubElement(
+                asset_elem,
                 "mesh",
                 name=str(meshname.stem),
                 file=str(meshname),
             )
-            obj_body.add(
+            etree.SubElement(
+                obj_body,
                 "geom",
                 type="mesh",
                 mesh=str(meshname.stem),
@@ -316,13 +330,15 @@ def process_obj(filename: Path, args: Args) -> None:
             )
         else:
             for i, (name, geom) in enumerate(mesh.geometry.items()):
-                meshname = work_dir / f"{filename.stem}_{i}.obj"
-                model.asset.add(
+                meshname = Path(f"{filename.stem}_{i}.obj")
+                etree.SubElement(
+                    asset_elem,
                     "mesh",
                     name=str(meshname.stem),
                     file=str(meshname),
                 )
-                obj_body.add(
+                etree.SubElement(
+                    obj_body,
                     "geom",
                     type="mesh",
                     mesh=str(meshname.stem),
@@ -341,12 +357,14 @@ def process_obj(filename: Path, args: Args) -> None:
             ]
             collisions.sort(key=lambda x: int(x.stem.split("_")[-1]))
             for collision in collisions:
-                model.asset.add(
+                etree.SubElement(
+                    asset_elem,
                     "mesh",
                     name=str(collision.stem),
-                    file=str(collision),
+                    file=str(collision.name),
                 )
-                obj_body.add(
+                etree.SubElement(
+                    obj_body,
                     "geom",
                     type="mesh",
                     mesh=str(collision.stem),
@@ -358,7 +376,8 @@ def process_obj(filename: Path, args: Args) -> None:
             # This isn't ideal as the convex hull will be a very bad approximation for
             # some meshes.
             if isinstance(mesh, trimesh.base.Trimesh):
-                obj_body.add(
+                etree.SubElement(
+                    obj_body,
                     "geom",
                     type="mesh",
                     mesh=str(meshname.stem),
@@ -366,29 +385,28 @@ def process_obj(filename: Path, args: Args) -> None:
                 )
             else:
                 for i, (name, geom) in enumerate(mesh.geometry.items()):
-                    obj_body.add(
+                    etree.SubElement(
+                        obj_body,
                         "geom",
                         type="mesh",
                         mesh=str(meshname.stem),
                         group="3",
                     )
 
+        # Dump.
+        xml_path = str(work_dir / f"{filename.stem}.xml")
+        tree = etree.ElementTree(root)
+        etree.indent(tree, space=_XML_INDENTATION, level=0)
+        tree.write(xml_path, encoding="utf-8")
+
         # Compile and step the physics to check for any errors.
         if args.compile_model:
             try:
-                physics = mjcf.Physics.from_mjcf_model(model)
-                physics.step()
+                model = mujoco.MjModel.from_xml_path(xml_path)
+                data = mujoco.MjData(model)
+                mujoco.mj_step(model, data)
             except Exception as e:
                 logging.error(f"\tError compiling MJCF: {e}")
-
-        # Dump.
-        mjcf_dir = work_dir / "mjcf"
-        mjcf_dir.mkdir(exist_ok=True)
-        mjcf.export_with_assets(
-            model,
-            mjcf_dir,
-            f"{filename.stem}.xml",
-        )
 
 
 def main() -> None:
