@@ -1,0 +1,10 @@
+[flake8]
+exclude = .git
+max-line-length = 80
+ignore =
+    E203,  # whitespace before colon (black default)
+    E501,  # line too long (<n> characters)
+    W503,  # line break before binary operator
+
+per-file-ignores =
+    */__init__.py: F401

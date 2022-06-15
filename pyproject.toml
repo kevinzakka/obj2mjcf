@@ -1,0 +1,11 @@
+[tool.black]
+line-length = 88  # Default.
+target-version = ["py38", "py39"]
+
+[tool.isort]
+profile = "black"
+skip_gitignore = true
+single_line_exclusions = ["typing"]
+
+[tool.mypy]
+ignore_missing_imports = true

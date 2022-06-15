@@ -113,9 +113,9 @@ class Material:
         """Construct a Material object from a string."""
         attrs = {"name": lines[0].split(" ")[1].strip()}
         for line in lines[1:]:
-            for field in _MTL_FIELDS:
-                if line.startswith(field):
-                    attrs[field] = " ".join(line.split(" ")[1:])
+            for attr in _MTL_FIELDS:
+                if line.startswith(attr):
+                    attrs[attr] = " ".join(line.split(" ")[1:])
                     break
         return Material(**attrs)
 
@@ -245,7 +245,7 @@ def process_obj(filename: Path, args: Args) -> None:
                 process_mtl = True
                 break
 
-    sub_mtls = []
+    sub_mtls: List[List[str]] = []
     mtls: List[Material] = []
     if process_mtl:
         # Make sure the MTL file exists.
@@ -264,7 +264,9 @@ def process_obj(filename: Path, args: Args) -> None:
         with open(mtl_filename, "r") as f:
             lines = f.readlines()
         # Remove comments, empty lines and newlines.
-        lines = [l.strip() for l in lines if not l.startswith("#") and l.strip()]
+        lines = [
+            l.strip() for l in lines if not l.startswith("#") and l.strip()
+        ]  # noqa: E741
         # Split at each new material definition.
         for line in lines:
             if line.startswith("newmtl"):
@@ -329,15 +331,15 @@ def process_obj(filename: Path, args: Args) -> None:
 
     # Save an MTL file for each submesh if desired.
     if args.save_mtl:
-        for i, mtl in enumerate(sub_mtls):
-            mtl_name = mtl[0].split(" ")[1].strip()
-            for line in mtl:
+        for i, smtl in enumerate(sub_mtls):
+            mtl_name = smtl[0].split(" ")[1].strip()
+            for line in smtl:
                 if "newmtl" in line:
                     material_name = line.split(" ")[1].strip()
                     break
             # Save the MTL file.
             with open(work_dir / f"{mtl_name}.mtl", "w") as f:
-                f.write("".join(mtl))
+                f.write("".join(smtl))
             # Edit the mtllib line to point to the new MTL file.
             savename = str(work_dir / f"{filename.stem}_{i}.obj")
             with open(savename, "r") as f:
