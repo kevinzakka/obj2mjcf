@@ -7,7 +7,7 @@ import subprocess
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Sequence
 
 import dcargs
 import mujoco
@@ -27,6 +27,21 @@ _VHACD_OUTPUTS = ["decomp.obj", "decomp.stl"]
 
 # 2-space indentation for the generated XML.
 _XML_INDENTATION = "  "
+
+# MTL fields relevant to MuJoCo.
+_MTL_FIELDS = (
+    # Ambient, diffuse and specular colors.
+    "Ka",
+    "Kd",
+    "Ks",
+    # d or Tr are used for the rgba transparency.
+    "d",
+    "Tr",
+    # Shininess.
+    "Ns",
+    # References a texture file.
+    "map_Kd",
+)
 
 
 class FillMode(enum.Enum):
@@ -78,6 +93,59 @@ class Args:
     """print verbose output"""
     vhacd_args: VhacdArgs = field(default_factory=VhacdArgs)
     """arguments to pass to V-HACD"""
+
+
+@dataclass
+class Material:
+    """A container for processing MTL materials for MuJoCo."""
+
+    name: str
+    Ka: Optional[str] = None
+    Kd: Optional[str] = None
+    Ks: Optional[str] = None
+    d: Optional[str] = None
+    Tr: Optional[str] = None
+    Ns: Optional[str] = None
+    map_Kd: Optional[str] = None
+
+    @staticmethod
+    def from_string(lines: Sequence[str]) -> "Material":
+        """Construct a Material object from a string."""
+        attrs = {"name": lines[0].split(" ")[1].strip()}
+        for line in lines[1:]:
+            for attr in _MTL_FIELDS:
+                if line.startswith(attr):
+                    attrs[attr] = " ".join(line.split(" ")[1:])
+                    break
+        return Material(**attrs)
+
+    def mjcf_rgba(self) -> str:
+        Kd = self.Kd or "1.0 1.0 1.0"
+        if self.d is not None:  # alpha
+            alpha = self.d
+        elif self.Tr is not None:  # 1 - alpha
+            alpha = str(1.0 - float(self.Tr))
+        else:
+            alpha = "1.0"
+        # TODO(kevin): Figure out how to use Ka for computing rgba.
+        return f"{Kd} {alpha}"
+
+    def mjcf_shininess(self) -> str:
+        if self.Ns is not None:
+            # Normalize Ns value to [0, 1].
+            # Ns values normally range from 0 to 1000.
+            Ns = float(self.Ns) / 1_000
+        else:
+            Ns = 0.5
+        return f"{Ns}"
+
+    def mjcf_specular(self) -> str:
+        if self.Ks is not None:
+            # Take the average of the specular RGB values.
+            Ks = sum(list(map(float, self.Ks.split(" ")))) / 3
+        else:
+            Ks = 0.5
+        return f"{Ks}"
 
 
 def decompose_convex(filename: Path, work_dir: Path, vhacd_args: VhacdArgs) -> bool:
@@ -167,59 +235,72 @@ def process_obj(filename: Path, args: Args) -> None:
     # Decompose the mesh into convex pieces if V-HACD is available.
     decomp_success = decompose_convex(filename, work_dir, args.vhacd_args)
 
-    # Read the MTL file from the OBJ file.
+    # Check if the OBJ files references an MTL file.
+    # TODO(kevin): Should we support multiple MTL files?
+    process_mtl = False
     with open(filename, "r") as f:
         for line in f.readlines():
-            if line.startswith("mtllib"):
+            if line.startswith("mtllib"):  # Deals with commented out lines.
                 name = line.split()[1]
+                process_mtl = True
                 break
-    mtl_filename = filename.parent / name
-    logging.info(f"Found MTL file: {mtl_filename}")
 
-    # Read the material file and parse each submaterial into a struct that will be used
-    # to create material assets in the MJCF file.
-    with open(mtl_filename, "r") as f:
-        lines = f.readlines()
-    split_ids = []
-    for i, line in enumerate(lines):
-        if line.startswith("newmtl"):
-            split_ids.append(i)
-    sub_mtls = []
-    for i in range(len(split_ids) - 1):
-        sub_mtls.append(lines[split_ids[i] : split_ids[i + 1]])
-    sub_mtls.append(lines[split_ids[-1] :])
-
-    @dataclass
-    class Material:
-        name: str
-        diffuse: str
-        texture: Optional[str]
-
+    sub_mtls: List[List[str]] = []
     mtls: List[Material] = []
-    for mtl in sub_mtls:
-        name = mtl[0].split(" ")[1].strip()
-        texture_name = None
-        for line in mtl:
-            if "map_Kd" in line:
-                texture = line.split(" ")[1].strip()
-                src_filename = filename.parent / texture
+    if process_mtl:
+        # Make sure the MTL file exists.
+        # The assumption is that the MTL path is relative to the OBJ path. I've seen
+        # this violated before, so unsure how to robustly handle it right now.
+        mtl_filename = filename.parent / name
+        if not mtl_filename.exists():
+            raise RuntimeError(
+                f"The MTL file {mtl_filename.resolve()} referenced in the OBJ file "
+                "does not exist. Note that obj2mjcf assumes that the MTL file path is "
+                "relative to the OBJ file path."
+            )
+        logging.info(f"Found MTL file: {mtl_filename}")
+
+        # Parse the MTL file into separate materials.
+        with open(mtl_filename, "r") as f:
+            lines = f.readlines()
+        # Remove comments, empty lines and newlines.
+        lines = [
+            l.strip() for l in lines if not l.startswith("#") and l.strip()
+        ]  # noqa: E741
+        # Split at each new material definition.
+        for line in lines:
+            if line.startswith("newmtl"):
+                sub_mtls.append([])
+            sub_mtls[-1].append(line)
+        for sub_mtl in sub_mtls:
+            mtls.append(Material.from_string(sub_mtl))
+
+        # Process each material.
+        for mtl in mtls:
+            logging.info(f"\tFound material: {mtl.name}")
+            if mtl.map_Kd is not None:
+                texture_path = Path(mtl.map_Kd)
+                texture_name = texture_path.name
+                src_filename = filename.parent / texture_path
                 # MTL might use relative paths, so we need to resolve them.
                 src_filename = src_filename.resolve()
+                if not src_filename.exists():
+                    raise RuntimeError(
+                        f"The texture file {src_filename.resolve()} referenced in the "
+                        "MTL file does not exist."
+                    )
                 # We want a flat directory structure in work_dir.
-                texture_name = Path(texture).name
                 dst_filename = work_dir / texture_name
                 shutil.copy(src_filename, dst_filename)
                 # MuJoCo only supports PNG textures.
-                if Path(texture).suffix.lower() != ".png":
+                if texture_path.suffix.lower() != ".png":
                     image = Image.open(dst_filename)
                     os.remove(dst_filename)
-                    dst_filename = (work_dir / Path(texture).stem).with_suffix(".png")
+                    dst_filename = (work_dir / texture_path.stem).with_suffix(".png")
                     image.save(dst_filename)
                     texture_name = dst_filename.name
-            if "Kd" in line:
-                diffuse = " ".join(line.split(" ")[1:]).strip()
-        mtls.append(Material(name, diffuse, texture_name))
-    logging.info("Done processing MTL file.")
+                    mtl.map_Kd = texture_name
+        logging.info("Done processing MTL file.")
 
     logging.info("Processing OBJ file with trimesh...")
     mesh = trimesh.load(
@@ -250,15 +331,15 @@ def process_obj(filename: Path, args: Args) -> None:
 
     # Save an MTL file for each submesh if desired.
     if args.save_mtl:
-        for i, mtl in enumerate(sub_mtls):
-            mtl_name = mtl[0].split(" ")[1].strip()
-            for line in mtl:
+        for i, smtl in enumerate(sub_mtls):
+            mtl_name = smtl[0].split(" ")[1].strip()
+            for line in smtl:
                 if "newmtl" in line:
                     material_name = line.split(" ")[1].strip()
                     break
             # Save the MTL file.
             with open(work_dir / f"{mtl_name}.mtl", "w") as f:
-                f.write("".join(mtl))
+                f.write("".join(smtl))
             # Edit the mtllib line to point to the new MTL file.
             savename = str(work_dir / f"{filename.stem}_{i}.obj")
             with open(savename, "r") as f:
@@ -280,71 +361,80 @@ def process_obj(filename: Path, args: Args) -> None:
 
     # Add assets.
     for material in mtls:
-        if material.texture is not None:
+        if material.map_Kd is not None:
+            # Create the texture asset.
+            texture = Path(material.map_Kd)
             etree.SubElement(
                 asset_elem,
                 "texture",
                 type="2d",
-                name=str(Path(material.texture).stem),
-                file=str(material.texture),
+                name=texture.stem,
+                file=texture.name,
             )
+            # Reference the texture asset in a material asset.
             etree.SubElement(
                 asset_elem,
                 "material",
                 name=material.name,
-                texture=str(Path(material.texture).stem),
-                specular="1",
-                shininess="1",
+                texture=texture.stem,
+                specular=material.mjcf_specular(),
+                shininess=material.mjcf_shininess(),
             )
         else:
             etree.SubElement(
                 asset_elem,
                 "material",
                 name=material.name,
-                rgba=material.diffuse + " 1.0",
+                specular=material.mjcf_specular(),
+                shininess=material.mjcf_shininess(),
+                rgba=material.mjcf_rgba(),
             )
 
     worldbody_elem = etree.SubElement(root, "worldbody")
+    obj_body = etree.SubElement(worldbody_elem, "body", name=filename.stem)
+
+    visual_kwargs = dict(type="mesh", contype="0", conaffinity="0", group="2")
+    collision_kwargs = dict(type="mesh", group="3")
 
     # Add visual geoms.
-    obj_body = etree.SubElement(worldbody_elem, "body", name=filename.stem)
     if isinstance(mesh, trimesh.base.Trimesh):
         meshname = Path(f"{filename.stem}.obj")
+        # Add the mesh to assets.
         etree.SubElement(
             asset_elem,
             "mesh",
-            name=str(meshname.stem),
+            name=meshname.stem,
             file=str(meshname),
         )
-        etree.SubElement(
-            obj_body,
-            "geom",
-            type="mesh",
-            mesh=str(meshname.stem),
-            material=material.name,
-            contype="0",
-            conaffinity="0",
-            group="2",
-        )
-    else:
-        for i, (name, geom) in enumerate(mesh.geometry.items()):
-            meshname = Path(f"{filename.stem}_{i}.obj")
-            etree.SubElement(
-                asset_elem,
-                "mesh",
-                name=str(meshname.stem),
-                file=str(meshname),
-            )
+        # Add the geom to the worldbody.
+        if process_mtl:
             etree.SubElement(
                 obj_body,
                 "geom",
-                type="mesh",
+                material=material.name,
                 mesh=str(meshname.stem),
-                material=name,
-                contype="0",
-                conaffinity="0",
-                group="2",
+                **visual_kwargs,
             )
+        else:
+            etree.SubElement(obj_body, "geom", mesh=meshname.stem, **visual_kwargs)
+    else:
+        for i, (name, geom) in enumerate(mesh.geometry.items()):
+            meshname = Path(f"{filename.stem}_{i}.obj")
+            # Add the mesh to assets.
+            etree.SubElement(
+                asset_elem,
+                "mesh",
+                name=meshname.stem,
+                file=str(meshname),
+            )
+            # Add the geom to the worldbody.
+            if process_mtl:
+                etree.SubElement(
+                    obj_body, "geom", mesh=meshname.stem, material=name, **visual_kwargs
+                )
+            else:
+                etree.SubElement(obj_body, "geom", mesh=meshname.stem, **visual_kwargs)
+
     # Add collision geoms.
     if decomp_success:
         # Find collision files from the decomposed convex hulls.
@@ -352,41 +442,27 @@ def process_obj(filename: Path, args: Args) -> None:
             x for x in work_dir.glob("**/*") if x.is_file() and "collision" in x.name
         ]
         collisions.sort(key=lambda x: int(x.stem.split("_")[-1]))
+
         for collision in collisions:
             etree.SubElement(
-                asset_elem,
-                "mesh",
-                name=str(collision.stem),
-                file=str(collision.name),
+                asset_elem, "mesh", name=collision.stem, file=collision.name
             )
             etree.SubElement(
                 obj_body,
                 "geom",
-                type="mesh",
-                mesh=str(collision.stem),
-                group="3",
+                mesh=collision.stem,
+                **collision_kwargs,
             )
     else:
-        # If no decomposed convex hulls were created, use the original mesh as
-        # the collision mesh.
-        # This isn't ideal as the convex hull will be a very bad approximation for
-        # some meshes.
+        # If no decomposed convex hulls were created, use the original mesh as the
+        # collision mesh.
         if isinstance(mesh, trimesh.base.Trimesh):
-            etree.SubElement(
-                obj_body,
-                "geom",
-                type="mesh",
-                mesh=str(meshname.stem),
-                group="3",
-            )
+            etree.SubElement(obj_body, "geom", mesh=meshname.stem, **collision_kwargs)
         else:
             for i, (name, geom) in enumerate(mesh.geometry.items()):
+                meshname = Path(f"{filename.stem}_{i}.obj")
                 etree.SubElement(
-                    obj_body,
-                    "geom",
-                    type="mesh",
-                    mesh=str(meshname.stem),
-                    group="3",
+                    obj_body, "geom", mesh=meshname.stem, **collision_kwargs
                 )
 
     tree = etree.ElementTree(root)
