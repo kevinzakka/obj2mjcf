@@ -235,8 +235,8 @@ def process_obj(filename: Path, args: Args) -> None:
     # Decompose the mesh into convex pieces if V-HACD is available.
     decomp_success = decompose_convex(filename, work_dir, args.vhacd_args)
 
-    # Does the OBJ file reference any MTL file?
-    # TODO(kevin): Should we support multiple MTL files?)
+    # Check if the OBJ files references an MTL file.
+    # TODO(kevin): Should we support multiple MTL files?
     process_mtl = False
     with open(filename, "r") as f:
         for line in f.readlines():
@@ -414,7 +414,7 @@ def process_obj(filename: Path, args: Args) -> None:
                 **visual_kwargs,
             )
         else:
-            etree.SubElement(obj_body, "geom", material=material.name, **visual_kwargs)
+            etree.SubElement(obj_body, "geom", mesh=meshname.stem, **visual_kwargs)
     else:
         for i, (name, geom) in enumerate(mesh.geometry.items()):
             meshname = Path(f"{filename.stem}_{i}.obj")
@@ -431,7 +431,7 @@ def process_obj(filename: Path, args: Args) -> None:
                     obj_body, "geom", mesh=meshname.stem, material=name, **visual_kwargs
                 )
             else:
-                etree.SubElement(obj_body, "geom", material=name, **visual_kwargs)
+                etree.SubElement(obj_body, "geom", mesh=meshname.stem, **visual_kwargs)
 
     # Add collision geoms.
     if decomp_success:
