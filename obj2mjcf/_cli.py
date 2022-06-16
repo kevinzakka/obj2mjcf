@@ -11,10 +11,10 @@ from typing import List, Optional, Sequence
 
 import dcargs
 import mujoco
-import tqdm
 import trimesh
 from lxml import etree
 from PIL import Image
+from termcolor import cprint
 
 # Find the V-HACD v4.0 executable in the system path.
 # Note trimesh has not updated their code to work with v4.0 which is why we do not use
@@ -97,8 +97,6 @@ class Args:
 
 @dataclass
 class Material:
-    """A container for processing MTL materials for MuJoCo."""
-
     name: str
     Ka: Optional[str] = None
     Kd: Optional[str] = None
@@ -132,8 +130,7 @@ class Material:
 
     def mjcf_shininess(self) -> str:
         if self.Ns is not None:
-            # Normalize Ns value to [0, 1].
-            # Ns values normally range from 0 to 1000.
+            # Normalize Ns value to [0, 1]. Ns values normally range from 0 to 1000.
             Ns = float(self.Ns) / 1_000
         else:
             Ns = 0.5
@@ -153,7 +150,10 @@ def decompose_convex(filename: Path, work_dir: Path, vhacd_args: VhacdArgs) -> b
         return False
 
     if _VHACD_EXECUTABLE is None:
-        logging.info("V-HACD was enabled but not found in the system path, skipping.")
+        logging.info(
+            "V-HACD was enabled but not found in the system path. Either install it "
+            "manually or run `bash install_vhacd.sh`. Skipping decomposition"
+        )
         return False
 
     obj_file = filename.resolve()
@@ -199,7 +199,7 @@ def decompose_convex(filename: Path, work_dir: Path, vhacd_args: VhacdArgs) -> b
             check=True,
         )
         if ret.returncode != 0:
-            logging.error(f"V-HACD failed on {filename}.")
+            logging.error(f"V-HACD failed on {filename}")
             return False
 
         # Remove the original obj file and the V-HACD output files.
@@ -222,13 +222,16 @@ def decompose_convex(filename: Path, work_dir: Path, vhacd_args: VhacdArgs) -> b
 
 def process_obj(filename: Path, args: Args) -> None:
     # Create a directory with the same name as the OBJ file. The processed submeshes
-    # and materials will be stored in this directory.
+    # and materials will be stored there.
     work_dir = filename.parent / filename.stem
     if work_dir.exists():
-        raise RuntimeError(
+        proceed = input(
             f"{work_dir.resolve()} already exists, maybe from a previous run? "
-            "Please remove it and try again."
+            "Proceeding will overwrite it.\nDo you wish to continue [y/n]: "
         )
+        if proceed.lower() != "y":
+            return
+        shutil.rmtree(work_dir)
     work_dir.mkdir(exist_ok=True)
     logging.info(f"Saving processed meshes to {work_dir}")
 
@@ -241,32 +244,28 @@ def process_obj(filename: Path, args: Args) -> None:
     with open(filename, "r") as f:
         for line in f.readlines():
             if line.startswith("mtllib"):  # Deals with commented out lines.
-                name = line.split()[1]
                 process_mtl = True
+                name = line.split()[1]
                 break
 
     sub_mtls: List[List[str]] = []
     mtls: List[Material] = []
     if process_mtl:
-        # Make sure the MTL file exists.
-        # The assumption is that the MTL path is relative to the OBJ path. I've seen
-        # this violated before, so unsure how to robustly handle it right now.
+        # Make sure the MTL file exists. The MTL filepath is relative to the OBJ's.
         mtl_filename = filename.parent / name
         if not mtl_filename.exists():
             raise RuntimeError(
                 f"The MTL file {mtl_filename.resolve()} referenced in the OBJ file "
-                "does not exist. Note that obj2mjcf assumes that the MTL file path is "
-                "relative to the OBJ file path."
+                f"{filename} does not exist"
             )
         logging.info(f"Found MTL file: {mtl_filename}")
 
         # Parse the MTL file into separate materials.
         with open(mtl_filename, "r") as f:
             lines = f.readlines()
-        # Remove comments, empty lines and newlines.
         lines = [
-            l.strip() for l in lines if not l.startswith("#") and l.strip()
-        ]  # noqa: E741
+            line.strip() for line in lines if not line.startswith("#") and line.strip()
+        ]
         # Split at each new material definition.
         for line in lines:
             if line.startswith("newmtl"):
@@ -277,32 +276,30 @@ def process_obj(filename: Path, args: Args) -> None:
 
         # Process each material.
         for mtl in mtls:
-            logging.info(f"\tFound material: {mtl.name}")
+            logging.info(f"Found material: {mtl.name}")
             if mtl.map_Kd is not None:
                 texture_path = Path(mtl.map_Kd)
                 texture_name = texture_path.name
                 src_filename = filename.parent / texture_path
-                # MTL might use relative paths, so we need to resolve them.
-                src_filename = src_filename.resolve()
                 if not src_filename.exists():
                     raise RuntimeError(
-                        f"The texture file {src_filename.resolve()} referenced in the "
-                        "MTL file does not exist."
+                        f"The texture file {src_filename} referenced in the MTL file "
+                        f"{mtl.name} does not exist"
                     )
                 # We want a flat directory structure in work_dir.
                 dst_filename = work_dir / texture_name
                 shutil.copy(src_filename, dst_filename)
-                # MuJoCo only supports PNG textures.
-                if texture_path.suffix.lower() != ".png":
+                # MuJoCo only supports PNG textures ¯\_(ツ)_/¯.
+                if texture_path.suffix.lower() in [".jpg", ".jpeg"]:
                     image = Image.open(dst_filename)
                     os.remove(dst_filename)
                     dst_filename = (work_dir / texture_path.stem).with_suffix(".png")
                     image.save(dst_filename)
                     texture_name = dst_filename.name
                     mtl.map_Kd = texture_name
-        logging.info("Done processing MTL file.")
+        logging.info("Done processing MTL file")
 
-    logging.info("Processing OBJ file with trimesh...")
+    logging.info("Processing OBJ file with trimesh")
     mesh = trimesh.load(
         filename,
         split_object=True,
@@ -317,7 +314,7 @@ def process_obj(filename: Path, args: Args) -> None:
         logging.info(f"Saving mesh {savename}")
         mesh.export(savename, include_texture=True, header=None)
     else:
-        logging.info("Grouping and saving submeshes by material...")
+        logging.info("Grouping and saving submeshes by material")
         for i, geom in enumerate(mesh.geometry.values()):
             savename = str(work_dir / f"{filename.stem}_{i}.obj")
             logging.info(f"Saving submesh {savename}")
@@ -476,9 +473,9 @@ def process_obj(filename: Path, args: Args) -> None:
             model = mujoco.MjModel.from_xml_path(str(tmp_path))
             data = mujoco.MjData(model)
             mujoco.mj_step(model, data)
-            logging.info("Model compiled successfully!")
+            cprint(f"{filename} compiled successfully!", "green")
         except Exception as e:
-            logging.error(f"Error compiling model: {e}")
+            cprint(f"Error compiling model: {e}", "red")
         finally:
             tmp_path.unlink(missing_ok=True)
 
@@ -503,7 +500,7 @@ def main() -> None:
         obj_files = [
             x for x in obj_files if re.search(args.obj_filter, x.name) is not None
         ]
-    logging.info(f"Processing {len(obj_files)} obj files.")
 
-    for obj_file in tqdm.tqdm(obj_files, disable=args.verbose):
+    for obj_file in obj_files:
+        cprint(f"Processing {obj_file}", "yellow")
         process_obj(obj_file, args)

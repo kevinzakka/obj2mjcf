@@ -25,7 +25,7 @@ core_requirements = [
     "mujoco>=2.2.0",
     "dcargs>=0.0.21",
     "numpy",
-    "tqdm",
+    "termcolor",
 ]
 
 classifiers = [

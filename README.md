@@ -18,6 +18,7 @@ The generated meshes can then be used as a drop-in replacement for the original 
 | Before | After |
 |--------|-------|
 |<img src="https://raw.githubusercontent.com/kevinzakka/obj2mjcf/main/assets/before.png" width="400"/>|<img src="https://raw.githubusercontent.com/kevinzakka/obj2mjcf/main/assets/after.png" width="400"/>|
+|<img src="https://raw.githubusercontent.com/kevinzakka/obj2mjcf/main/assets/panda_link7_before.png" width="400"/>|<img src="https://raw.githubusercontent.com/kevinzakka/obj2mjcf/main/assets/panda_link7_after.png" width="400"/>|
 
 ## Motivation
 
