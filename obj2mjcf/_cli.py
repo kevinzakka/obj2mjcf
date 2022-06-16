@@ -305,7 +305,9 @@ def process_obj(filename: Path, args: Args) -> None:
         split_object=True,
         group_material=True,
         process=False,
-        maintain_order=True,
+        # Note setting this to False is important. Without it, there are a lot of weird
+        # visual artifacts in the texture.
+        maintain_order=False,
     )
 
     if isinstance(mesh, trimesh.base.Trimesh):
