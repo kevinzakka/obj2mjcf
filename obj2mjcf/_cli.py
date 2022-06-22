@@ -482,7 +482,8 @@ def process_obj(filename: Path, args: Args) -> None:
         except Exception as e:
             cprint(f"Error compiling model: {e}", "red")
         finally:
-            tmp_path.unlink(missing_ok=True)
+            if tmp_path.exists():
+                tmp_path.unlink()
 
     # Dump.
     if args.save_mjcf:

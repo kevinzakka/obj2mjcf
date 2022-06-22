@@ -11,6 +11,7 @@ def test_runs_without_error() -> None:
             "obj2mjcf",
             "--obj-dir",
             f"{str(_THIS_DIR)}",
+            "--save-mtl",
             "--save-mjcf",
             "--compile-model",
             "--verbose",
