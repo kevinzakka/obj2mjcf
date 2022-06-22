@@ -207,7 +207,8 @@ def decompose_convex(filename: Path, work_dir: Path, vhacd_args: VhacdArgs) -> b
         # Remove the original obj file and the V-HACD output files.
         for name in _VHACD_OUTPUTS + [obj_file.name]:
             file_to_delete = Path(tmpdirname) / name
-            file_to_delete.unlink(missing_ok=True)
+            if file_to_delete.exists():
+                file_to_delete.unlink()
 
         os.chdir(prev_dir)
 
@@ -481,8 +482,7 @@ def process_obj(filename: Path, args: Args) -> None:
         except Exception as e:
             cprint(f"Error compiling model: {e}", "red")
         finally:
-            if tmp_path.exists():
-                tmp_path.unlink()
+            tmp_path.unlink(missing_ok=True)
 
     # Dump.
     if args.save_mjcf:

@@ -1,4 +1,8 @@
+import pathlib
 import subprocess
+
+# Path to the directory containing this file.
+_THIS_DIR = pathlib.Path(__file__).parent.absolute()
 
 
 def test_runs_without_error() -> None:
@@ -6,9 +10,10 @@ def test_runs_without_error() -> None:
         [
             "obj2mjcf",
             "--obj-dir",
-            ".",
-            "--obj-filter",
-            "groups",
+            f"{str(_THIS_DIR)}",
+            "--save-mjcf",
+            "--compile-model",
+            "--verbose",
         ]
     )
     assert retcode == 0
