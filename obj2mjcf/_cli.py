@@ -113,7 +113,9 @@ class Material:
         for line in lines[1:]:
             for attr in _MTL_FIELDS:
                 if line.startswith(attr):
-                    attrs[attr] = " ".join(line.split(" ")[1:])
+                    elems = line.split(" ")[1:]
+                    elems = [elem for elem in elems if elem != ""]
+                    attrs[attr] = " ".join(elems)
                     break
         return Material(**attrs)
 
@@ -205,7 +207,8 @@ def decompose_convex(filename: Path, work_dir: Path, vhacd_args: VhacdArgs) -> b
         # Remove the original obj file and the V-HACD output files.
         for name in _VHACD_OUTPUTS + [obj_file.name]:
             file_to_delete = Path(tmpdirname) / name
-            file_to_delete.unlink(missing_ok=True)
+            if file_to_delete.exists():
+                file_to_delete.unlink()
 
         os.chdir(prev_dir)
 
@@ -479,7 +482,8 @@ def process_obj(filename: Path, args: Args) -> None:
         except Exception as e:
             cprint(f"Error compiling model: {e}", "red")
         finally:
-            tmp_path.unlink(missing_ok=True)
+            if tmp_path.exists():
+                tmp_path.unlink()
 
     # Dump.
     if args.save_mjcf:
