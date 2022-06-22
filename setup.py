@@ -26,6 +26,7 @@ core_requirements = [
     "dcargs>=0.0.21",
     "numpy",
     "termcolor",
+    "lxml",
 ]
 
 classifiers = [
