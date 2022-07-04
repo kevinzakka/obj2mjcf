@@ -1,3 +1,5 @@
+"""A CLI for processing composite Wavefront OBJ files into a MuJoCo-conducive format."""
+
 import enum
 import logging
 import os
@@ -343,7 +345,10 @@ def process_obj(filename: Path, args: Args) -> None:
             with open(work_dir / f"{mtl_name}.mtl", "w") as f:
                 f.write("".join(smtl))
             # Edit the mtllib line to point to the new MTL file.
-            savename = str(work_dir / f"{filename.stem}_{i}.obj")
+            if len(sub_mtls) > 1:
+                savename = str(work_dir / f"{filename.stem}_{i}.obj")
+            else:
+                savename = str(work_dir / f"{filename.stem}.obj")
             with open(savename, "r") as f:
                 lines = f.readlines()
             for i, line in enumerate(lines):
@@ -493,7 +498,7 @@ def process_obj(filename: Path, args: Args) -> None:
 
 
 def main() -> None:
-    args = dcargs.parse(Args)
+    args = dcargs.cli(Args, description=__doc__)
 
     if args.verbose:
         logging.getLogger().setLevel(logging.INFO)
