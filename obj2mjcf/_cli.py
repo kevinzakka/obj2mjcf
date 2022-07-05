@@ -79,6 +79,12 @@ class VhacdArgs:
 
 
 @dataclass(frozen=True)
+class TextureArgs:
+    resize_percent: float = 1.0
+    """resize the texture to this percentage of the original size"""
+
+
+@dataclass(frozen=True)
 class Args:
     obj_dir: str
     """path to a directory containing obj files. All obj files in the directory will be
@@ -95,6 +101,7 @@ class Args:
     """print verbose output"""
     vhacd_args: VhacdArgs = field(default_factory=VhacdArgs)
     """arguments to pass to V-HACD"""
+    texture_args: TextureArgs = field(default_factory=TextureArgs)
 
 
 @dataclass
@@ -147,6 +154,18 @@ class Material:
         else:
             Ks = 0.5
         return f"{Ks}"
+
+
+def resize_texture(filename: Path, texture_args: TextureArgs) -> None:
+    """Resize a texture to a percentage of its original size."""
+    if texture_args.resize_percent == 1.0:
+        return
+    image = Image.open(filename)
+    new_width = int(image.size[0] * texture_args.resize_percent)
+    new_height = int(image.size[1] * texture_args.resize_percent)
+    logging.info(f"Resizing {filename} to {new_width}x{new_height}")
+    image = image.resize((new_width, new_height), Image.LANCZOS)
+    image.save(filename)
 
 
 def decompose_convex(filename: Path, work_dir: Path, vhacd_args: VhacdArgs) -> bool:
@@ -302,6 +321,7 @@ def process_obj(filename: Path, args: Args) -> None:
                     image.save(dst_filename)
                     texture_name = dst_filename.name
                     mtl.map_Kd = texture_name
+                resize_texture(dst_filename, args.texture_args)
         logging.info("Done processing MTL file")
 
     logging.info("Processing OBJ file with trimesh")
