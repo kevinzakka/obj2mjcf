@@ -102,8 +102,8 @@ class Args:
     vhacd_args: VhacdArgs = field(default_factory=VhacdArgs)
     """arguments to pass to V-HACD"""
     texture_args: TextureArgs = field(default_factory=TextureArgs)
-    """overwrite if existing files"""
     overwrite: bool = False
+    """overwrite if existing files"""
 
 
 @dataclass
