@@ -103,7 +103,7 @@ class Args:
     """arguments to pass to V-HACD"""
     texture_args: TextureArgs = field(default_factory=TextureArgs)
     overwrite: bool = False
-    """overwrite if existing files"""
+    """overwrite previous run output"""
 
 
 @dataclass

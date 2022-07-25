@@ -63,7 +63,7 @@ optional arguments:
   --save-mjcf           save an example XML (MJCF) file
   --compile-model       compile the MJCF file to check for errors
   --verbose             print verbose output
-  --overwrite           overwrite if existing files
+  --overwrite           overwrite previous run output
 
 optional vhacd_args arguments:
   arguments to pass to V-HACD
