@@ -102,6 +102,8 @@ class Args:
     vhacd_args: VhacdArgs = field(default_factory=VhacdArgs)
     """arguments to pass to V-HACD"""
     texture_args: TextureArgs = field(default_factory=TextureArgs)
+    overwrite: bool = False
+    """overwrite previous run output"""
 
 
 @dataclass
@@ -249,12 +251,13 @@ def process_obj(filename: Path, args: Args) -> None:
     # and materials will be stored there.
     work_dir = filename.parent / filename.stem
     if work_dir.exists():
-        proceed = input(
-            f"{work_dir.resolve()} already exists, maybe from a previous run? "
-            "Proceeding will overwrite it.\nDo you wish to continue [y/n]: "
-        )
-        if proceed.lower() != "y":
-            return
+        if not args.overwrite:
+            proceed = input(
+                f"{work_dir.resolve()} already exists, maybe from a previous run? "
+                "Proceeding will overwrite it.\nDo you wish to continue [y/n]: "
+            )
+            if proceed.lower() != "y":
+                return
         shutil.rmtree(work_dir)
     work_dir.mkdir(exist_ok=True)
     logging.info(f"Saving processed meshes to {work_dir}")
