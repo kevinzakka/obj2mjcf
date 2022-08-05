@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Install V-HACD 4.0.
+# Install V-HACD v4.0.0.
 
 # Check that cmake is installed.
 t=`which cmake`
@@ -10,8 +10,7 @@ if [ -z "$t" ]; then
 fi
 
 # Clone and build executable.
-# TODO(kevin): Peg to a 4.0 release when available, see #113.
-git clone https://github.com/kmammou/v-hacd.git
+git clone https://github.com/kmammou/v-hacd.git --branch v4.0.0
 cd v-hacd/app
 cmake CMakeLists.txt
 cmake --build .
