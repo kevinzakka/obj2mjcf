@@ -366,7 +366,7 @@ def process_obj(filename: Path, args: Args) -> None:
                     break
             # Save the MTL file.
             with open(work_dir / f"{mtl_name}.mtl", "w") as f:
-                f.write("".join(smtl))
+                f.write("\n".join(smtl))
             # Edit the mtllib line to point to the new MTL file.
             if len(sub_mtls) > 1:
                 savename = str(work_dir / f"{filename.stem}_{i}.obj")
