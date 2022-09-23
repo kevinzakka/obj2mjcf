@@ -45,6 +45,9 @@ _MTL_FIELDS = (
     "map_Kd",
 )
 
+# Character used to denote a comment in an MTL file.
+_MTL_COMMENT_CHAR = "#"
+
 
 class FillMode(enum.Enum):
     FLOOD = enum.auto()
@@ -290,9 +293,12 @@ def process_obj(filename: Path, args: Args) -> None:
         # Parse the MTL file into separate materials.
         with open(mtl_filename, "r") as f:
             lines = f.readlines()
-        lines = [
-            line.strip() for line in lines if not line.startswith("#") and line.strip()
-        ]
+        # Remove comments.
+        lines = [line for line in lines if not line.startswith(_MTL_COMMENT_CHAR)]
+        # Remove empty lines.
+        lines = [line for line in lines if line.strip()]
+        # Remove trailing whitespace.
+        lines = [line.strip() for line in lines]
         # Split at each new material definition.
         for line in lines:
             if line.startswith("newmtl"):
@@ -366,7 +372,7 @@ def process_obj(filename: Path, args: Args) -> None:
                     break
             # Save the MTL file.
             with open(work_dir / f"{mtl_name}.mtl", "w") as f:
-                f.write("".join(smtl))
+                f.write("\n".join(smtl))
             # Edit the mtllib line to point to the new MTL file.
             if len(sub_mtls) > 1:
                 savename = str(work_dir / f"{filename.stem}_{i}.obj")
