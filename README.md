@@ -44,11 +44,9 @@ bash install_vhacd.sh
 ## Usage
 
 ```bash
-usage: obj2mjcf [-h] --obj-dir STR [--obj-filter STR] [--save-mtl] [--save-mjcf] [--compile-model] [--verbose] [--vhacd-args.enable]
-                [--vhacd-args.max-output-convex-hulls INT] [--vhacd-args.voxel-resolution INT] [--vhacd-args.volume-error-percent FLOAT]
-                [--vhacd-args.max-recursion-depth INT] [--vhacd-args.disable-shrink-wrap] [--vhacd-args.fill-mode {FLOOD,SURFACE,RAYCAST}]
-                [--vhacd-args.max-hull-vert-count INT] [--vhacd-args.disable-async] [--vhacd-args.min-edge-length INT] [--vhacd-args.split-hull]
-                [--texture-args.resize-percent FLOAT]
+usage: obj2mjcf [-h] --obj-dir STR [--obj-filter STR] [--save-mtl] [--save-mjcf] [--compile-model] [--verbose] [--vhacd-args.enable] [--vhacd-args.max-output-convex-hulls INT] [--vhacd-args.voxel-resolution INT]
+                [--vhacd-args.volume-error-percent FLOAT] [--vhacd-args.max-recursion-depth INT] [--vhacd-args.disable-shrink-wrap] [--vhacd-args.fill-mode {FLOOD,SURFACE,RAYCAST}] [--vhacd-args.max-hull-vert-count INT]
+                [--vhacd-args.disable-async] [--vhacd-args.min-edge-length INT] [--vhacd-args.split-hull] [--texture-resize-percent FLOAT] [--overwrite] [--add-free-joint]
 
 A CLI for processing composite Wavefront OBJ files into a MuJoCo-conducive format.
 
@@ -63,7 +61,10 @@ optional arguments:
   --save-mjcf           save an example XML (MJCF) file
   --compile-model       compile the MJCF file to check for errors
   --verbose             print verbose output
+  --texture-resize-percent FLOAT
+                        resize the texture to this percentage of the original size (default: 1.0)
   --overwrite           overwrite previous run output
+  --add-free-joint      add a free joint to the root body
 
 optional vhacd_args arguments:
   arguments to pass to V-HACD
@@ -89,10 +90,6 @@ optional vhacd_args arguments:
                         minimum size of a voxel edge (default: 2)
   --vhacd-args.split-hull
                         try to find optimal split plane location
-
-optional texture_args arguments:
-  --texture-args.resize-percent FLOAT
-                        resize the texture to this percentage of the original size (default: 1.0)
 ```
 
 [OBJ]: https://en.wikipedia.org/wiki/Wavefront_.obj_file

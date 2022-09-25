@@ -82,12 +82,6 @@ class VhacdArgs:
 
 
 @dataclass(frozen=True)
-class TextureArgs:
-    resize_percent: float = 1.0
-    """resize the texture to this percentage of the original size"""
-
-
-@dataclass(frozen=True)
 class Args:
     obj_dir: str
     """path to a directory containing obj files. All obj files in the directory will be
@@ -104,9 +98,12 @@ class Args:
     """print verbose output"""
     vhacd_args: VhacdArgs = field(default_factory=VhacdArgs)
     """arguments to pass to V-HACD"""
-    texture_args: TextureArgs = field(default_factory=TextureArgs)
+    texture_resize_percent: float = 1.0
+    """resize the texture to this percentage of the original size"""
     overwrite: bool = False
     """overwrite previous run output"""
+    add_free_joint: bool = False
+    """add a free joint to the root body"""
 
 
 @dataclass
@@ -161,13 +158,13 @@ class Material:
         return f"{Ks}"
 
 
-def resize_texture(filename: Path, texture_args: TextureArgs) -> None:
+def resize_texture(filename: Path, resize_percent) -> None:
     """Resize a texture to a percentage of its original size."""
-    if texture_args.resize_percent == 1.0:
+    if resize_percent == 1.0:
         return
     image = Image.open(filename)
-    new_width = int(image.size[0] * texture_args.resize_percent)
-    new_height = int(image.size[1] * texture_args.resize_percent)
+    new_width = int(image.size[0] * resize_percent)
+    new_height = int(image.size[1] * resize_percent)
     logging.info(f"Resizing {filename} to {new_width}x{new_height}")
     image = image.resize((new_width, new_height), Image.LANCZOS)
     image.save(filename)
@@ -330,7 +327,7 @@ def process_obj(filename: Path, args: Args) -> None:
                     image.save(dst_filename)
                     texture_name = dst_filename.name
                     mtl.map_Kd = texture_name
-                resize_texture(dst_filename, args.texture_args)
+                resize_texture(dst_filename, args.texture_resize_percent)
         logging.info("Done processing MTL file")
 
     logging.info("Processing OBJ file with trimesh")
@@ -393,9 +390,25 @@ def process_obj(filename: Path, args: Args) -> None:
 
     # Build an MJCF.
     root = etree.Element("mujoco", model=filename.stem)
-    asset_elem = etree.SubElement(root, "asset")
+
+    # Add visual and collision default classes.
+    default_elem = etree.SubElement(root, "default")
+    visual_default_elem = etree.SubElement(default_elem, "default")
+    visual_default_elem.attrib["class"] = "visual"
+    etree.SubElement(
+        visual_default_elem,
+        "geom",
+        group="2",
+        type="mesh",
+        contype="0",
+        conaffinity="0",
+    )
+    collision_default_elem = etree.SubElement(default_elem, "default")
+    collision_default_elem.attrib["class"] = "collision"
+    etree.SubElement(collision_default_elem, "geom", group="3", type="mesh")
 
     # Add assets.
+    asset_elem = etree.SubElement(root, "asset")
     for material in mtls:
         if material.map_Kd is not None:
             # Create the texture asset.
@@ -428,48 +441,37 @@ def process_obj(filename: Path, args: Args) -> None:
 
     worldbody_elem = etree.SubElement(root, "worldbody")
     obj_body = etree.SubElement(worldbody_elem, "body", name=filename.stem)
-
-    visual_kwargs = dict(type="mesh", contype="0", conaffinity="0", group="2")
-    collision_kwargs = dict(type="mesh", group="3")
+    if args.add_free_joint:
+        etree.SubElement(obj_body, "freejoint")
 
     # Add visual geoms.
     if isinstance(mesh, trimesh.base.Trimesh):
         meshname = Path(f"{filename.stem}.obj")
         # Add the mesh to assets.
-        etree.SubElement(
-            asset_elem,
-            "mesh",
-            name=meshname.stem,
-            file=str(meshname),
-        )
+        etree.SubElement(asset_elem, "mesh", file=str(meshname))
         # Add the geom to the worldbody.
         if process_mtl:
-            etree.SubElement(
-                obj_body,
-                "geom",
-                material=material.name,
-                mesh=str(meshname.stem),
-                **visual_kwargs,
+            e_ = etree.SubElement(
+                obj_body, "geom", material=material.name, mesh=str(meshname.stem)
             )
+            e_.attrib["class"] = "visual"
         else:
-            etree.SubElement(obj_body, "geom", mesh=meshname.stem, **visual_kwargs)
+            e_ = etree.SubElement(obj_body, "geom", mesh=meshname.stem)
+            e_.attrib["class"] = "visual"
     else:
         for i, (name, geom) in enumerate(mesh.geometry.items()):
             meshname = Path(f"{filename.stem}_{i}.obj")
             # Add the mesh to assets.
-            etree.SubElement(
-                asset_elem,
-                "mesh",
-                name=meshname.stem,
-                file=str(meshname),
-            )
+            etree.SubElement(asset_elem, "mesh", file=str(meshname))
             # Add the geom to the worldbody.
             if process_mtl:
-                etree.SubElement(
-                    obj_body, "geom", mesh=meshname.stem, material=name, **visual_kwargs
+                e_ = etree.SubElement(
+                    obj_body, "geom", mesh=meshname.stem, material=name
                 )
+                e_.attrib["class"] = "visual"
             else:
-                etree.SubElement(obj_body, "geom", mesh=meshname.stem, **visual_kwargs)
+                e_ = etree.SubElement(obj_body, "geom", mesh=meshname.stem)
+                e_.attrib["class"] = "visual"
 
     # Add collision geoms.
     if decomp_success:
@@ -480,26 +482,20 @@ def process_obj(filename: Path, args: Args) -> None:
         collisions.sort(key=lambda x: int(x.stem.split("_")[-1]))
 
         for collision in collisions:
-            etree.SubElement(
-                asset_elem, "mesh", name=collision.stem, file=collision.name
-            )
-            etree.SubElement(
-                obj_body,
-                "geom",
-                mesh=collision.stem,
-                **collision_kwargs,
-            )
+            etree.SubElement(asset_elem, "mesh", file=collision.name)
+            e_ = etree.SubElement(obj_body, "geom", mesh=collision.stem)
+            e_.attrib["class"] = "collision"
     else:
         # If no decomposed convex hulls were created, use the original mesh as the
         # collision mesh.
         if isinstance(mesh, trimesh.base.Trimesh):
-            etree.SubElement(obj_body, "geom", mesh=meshname.stem, **collision_kwargs)
+            e_ = etree.SubElement(obj_body, "geom", mesh=meshname.stem)
+            e_.attrib["class"] = "collision"
         else:
             for i, (name, geom) in enumerate(mesh.geometry.items()):
                 meshname = Path(f"{filename.stem}_{i}.obj")
-                etree.SubElement(
-                    obj_body, "geom", mesh=meshname.stem, **collision_kwargs
-                )
+                e_ = etree.SubElement(obj_body, "geom", mesh=meshname.stem)
+                e_.attrib["class"] = "collision"
 
     tree = etree.ElementTree(root)
     etree.indent(tree, space=_XML_INDENTATION, level=0)
