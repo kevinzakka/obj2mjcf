@@ -20,7 +20,7 @@ with open(_here / "README.md", "r") as f:
     readme = f.read()
 
 core_requirements = [
-    "trimesh>=3.12.5",
+    "trimesh>=3.15.2",
     "Pillow>=9.1.1",
     "mujoco>=2.2.0",
     "dcargs>=0.1.2",

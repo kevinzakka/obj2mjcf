@@ -353,6 +353,24 @@ def process_obj(filename: Path, args: Args) -> None:
             logging.info(f"Saving submesh {savename}")
             geom.export(savename, include_texture=True, header=None)
 
+    # Edge case handling where the material file can have many materials but the OBJ
+    # itself only references one. In that case, we trim out the extra materials and
+    # only keep the one that is referenced.
+    if isinstance(mesh, trimesh.base.Trimesh) and len(mtls) > 1:
+        # Find the material that is referenced.
+        with open(filename, "r") as f:
+            lines = f.readlines()
+        for i, line in enumerate(lines):
+            if line.startswith("usemtl"):
+                break
+        mat_name = line.split()[1]
+        # Trim out the extra materials.
+        for smtl in sub_mtls:
+            if smtl[0].split()[1] == mat_name:
+                break
+        sub_mtls = [smtl]
+        mtls = [Material.from_string(smtl)]
+
     # Delete any MTL files that were created during trimesh processing, if any.
     for file in [
         x for x in work_dir.glob("**/*") if x.is_file() and "material_0" in x.name
