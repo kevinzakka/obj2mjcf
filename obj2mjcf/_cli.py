@@ -11,9 +11,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional, Sequence
 
-import dcargs
 import mujoco
 import trimesh
+import tyro
 from lxml import etree
 from PIL import Image
 from termcolor import cprint
@@ -541,7 +541,7 @@ def process_obj(filename: Path, args: Args) -> None:
 
 
 def main() -> None:
-    args = dcargs.cli(Args, description=__doc__)
+    args = tyro.cli(Args, description=__doc__)
 
     if args.verbose:
         logging.getLogger().setLevel(logging.INFO)
