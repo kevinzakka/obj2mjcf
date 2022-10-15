@@ -43,53 +43,10 @@ bash install_vhacd.sh
 
 ## Usage
 
+Type the following at the command line for a detailed description of the CLI:
+
 ```bash
-usage: obj2mjcf [-h] --obj-dir STR [--obj-filter STR] [--save-mtl] [--save-mjcf] [--compile-model] [--verbose] [--vhacd-args.enable] [--vhacd-args.max-output-convex-hulls INT] [--vhacd-args.voxel-resolution INT]
-                [--vhacd-args.volume-error-percent FLOAT] [--vhacd-args.max-recursion-depth INT] [--vhacd-args.disable-shrink-wrap] [--vhacd-args.fill-mode {FLOOD,SURFACE,RAYCAST}] [--vhacd-args.max-hull-vert-count INT]
-                [--vhacd-args.disable-async] [--vhacd-args.min-edge-length INT] [--vhacd-args.split-hull] [--texture-resize-percent FLOAT] [--overwrite] [--add-free-joint]
-
-A CLI for processing composite Wavefront OBJ files into a MuJoCo-conducive format.
-
-required arguments:
-  --obj-dir STR         path to a directory containing obj files. All obj files in the directory will be
-                        converted
-
-optional arguments:
-  -h, --help            show this help message and exit
-  --obj-filter STR      only convert obj files matching this regex (default: None)
-  --save-mtl            save the mtl files
-  --save-mjcf           save an example XML (MJCF) file
-  --compile-model       compile the MJCF file to check for errors
-  --verbose             print verbose output
-  --texture-resize-percent FLOAT
-                        resize the texture to this percentage of the original size (default: 1.0)
-  --overwrite           overwrite previous run output
-  --add-free-joint      add a free joint to the root body
-
-optional vhacd_args arguments:
-  arguments to pass to V-HACD
-
-  --vhacd-args.enable   enable convex decomposition using V-HACD
-  --vhacd-args.max-output-convex-hulls INT
-                        maximum number of output convex hulls (default: 32)
-  --vhacd-args.voxel-resolution INT
-                        total number of voxels to use (default: 100000)
-  --vhacd-args.volume-error-percent FLOAT
-                        volume error allowed as a percentage (default: 1.0)
-  --vhacd-args.max-recursion-depth INT
-                        maximum recursion depth (default: 14)
-  --vhacd-args.disable-shrink-wrap
-                        do not shrink wrap output to source mesh
-  --vhacd-args.fill-mode {FLOOD,SURFACE,RAYCAST}
-                        fill mode (default: FLOOD)
-  --vhacd-args.max-hull-vert-count INT
-                        maximum number of vertices in the output convex hull (default: 64)
-  --vhacd-args.disable-async
-                        do not run asynchronously
-  --vhacd-args.min-edge-length INT
-                        minimum size of a voxel edge (default: 2)
-  --vhacd-args.split-hull
-                        try to find optimal split plane location
+obj2mjcf --help
 ```
 
 [OBJ]: https://en.wikipedia.org/wiki/Wavefront_.obj_file
