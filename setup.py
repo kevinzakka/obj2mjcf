@@ -75,7 +75,6 @@ setup(
     license_files=("LICENSE",),
     packages=find_packages(),
     package_data={f"{name}": ["py.typed"]},
-    zip_safe=True,
     python_requires=">=3.7",
     install_requires=core_requirements,
     extras_require={
