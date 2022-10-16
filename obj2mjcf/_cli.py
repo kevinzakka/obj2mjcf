@@ -1,4 +1,4 @@
-"""A CLI for processing composite Wavefront OBJ files into a MuJoCo-conducive format."""
+"""A CLI that processes composite Wavefront OBJ files for use in MuJoCo."""
 
 import enum
 import logging

@@ -46,7 +46,7 @@ author = "Kevin Zakka"
 
 author_email = "kevinarmandzakka@gmail.com"
 
-description = "A library that processes composite Wavefront OBJ files for use in MuJoCo"
+description = "A CLI that processes composite Wavefront OBJ files for use in MuJoCo"
 
 
 setup(
