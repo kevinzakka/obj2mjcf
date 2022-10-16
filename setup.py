@@ -20,13 +20,13 @@ with open(_here / "README.md", "r") as f:
     readme = f.read()
 
 core_requirements = [
-    "trimesh>=3.15.2",
-    "Pillow>=9.1.1",
+    "trimesh>=3.15.5",
+    "Pillow>=9.2.0",
     "mujoco>=2.2.0",
     "tyro>=0.3.22",
     "numpy",
-    "termcolor",
-    "lxml",
+    "termcolor>=2.0.1",
+    "lxml>=4.9.1",
 ]
 
 classifiers = [
@@ -46,9 +46,7 @@ author = "Kevin Zakka"
 
 author_email = "kevinarmandzakka@gmail.com"
 
-description = (
-    "A CLI for processing composite Wavefront OBJ files into a MuJoCo-conducive format"
-)
+description = "A library that processes composite Wavefront OBJ files for use in MuJoCo"
 
 
 setup(
