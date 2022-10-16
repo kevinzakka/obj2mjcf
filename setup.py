@@ -29,6 +29,17 @@ core_requirements = [
     "lxml>=4.9.1",
 ]
 
+testing_requirements = [
+    "pytest",
+]
+
+dev_requirements = [
+    "black",
+    "isort",
+    "flake8",
+    "mypy",
+] + testing_requirements
+
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -46,7 +57,7 @@ author = "Kevin Zakka"
 
 author_email = "kevinarmandzakka@gmail.com"
 
-description = "A CLI that processes composite Wavefront OBJ files for use in MuJoCo"
+description = "A CLI for processing composite Wavefront OBJ files for use in MuJoCo"
 
 
 setup(
@@ -67,6 +78,10 @@ setup(
     zip_safe=True,
     python_requires=">=3.7",
     install_requires=core_requirements,
+    extras_require={
+        "testing": testing_requirements,
+        "dev": dev_requirements,
+    },
     classifiers=classifiers,
     entry_points={"console_scripts": [f"{name}={name}._cli:main"]},
 )

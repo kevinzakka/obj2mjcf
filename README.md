@@ -7,7 +7,7 @@
 [pypi-badge]: https://badge.fury.io/py/obj2mjcf.svg
 [pypi]: https://pypi.org/project/obj2mjcf/
 
-`obj2mjcf` is a CLI that processes composite Wavefront [OBJ] files for use in [MuJoCo]. It automatically:
+`obj2mjcf` is a CLI for proccessing composite Wavefront [OBJ] files for use in [MuJoCo]. It automatically:
 
 * Splits an OBJ file into sub-meshes that are grouped by the materials referenced in the OBJ's MTL file
 * Generates an MJCF XML file that is pre-filled with materials, meshes and geom elements referencing these OBJ files
