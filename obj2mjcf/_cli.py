@@ -341,6 +341,9 @@ def process_obj(filename: Path, args: Args) -> None:
         maintain_order=False,
     )
 
+    # Create a directory to map the mtl names to the decomposed meshes
+    material_name_dict = dict()
+
     if isinstance(mesh, trimesh.base.Trimesh):
         # No submeshes, just save the mesh.
         savename = str(work_dir / f"{filename.stem}.obj")
@@ -348,8 +351,9 @@ def process_obj(filename: Path, args: Args) -> None:
         mesh.export(savename, include_texture=True, header=None)
     else:
         logging.info("Grouping and saving submeshes by material")
-        for i, geom in enumerate(mesh.geometry.values()):
+        for i, (material_name, geom) in enumerate(mesh.geometry.items()):
             savename = str(work_dir / f"{filename.stem}_{i}.obj")
+            material_name_dict[savename] = material_name
             logging.info(f"Saving submesh {savename}")
             geom.export(savename, include_texture=True, header=None)
 
@@ -379,30 +383,38 @@ def process_obj(filename: Path, args: Args) -> None:
 
     # Save an MTL file for each submesh if desired.
     if args.save_mtl:
+        # Creating the sub mtl files
         for i, smtl in enumerate(sub_mtls):
-            mtl_name = smtl[0].split(" ")[1].strip()
+            material_name = None
+            # Fetch the name of the material for a sub mtl 
             for line in smtl:
                 if "newmtl" in line:
                     material_name = line.split(" ")[1].strip()
                     break
+            if material_name is None:
+                # Raise an error here?
+                continue
+            # Handle the case where only one mtl is present
+            if len(sub_mtls) <= 1:
+                savename = str(work_dir / f"{filename.stem}.obj")
+                material_name_dict[savename] = material_name
             # Save the MTL file.
-            with open(work_dir / f"{mtl_name}.mtl", "w") as f:
+            with open(work_dir / f"{material_name}.mtl", "w") as f:
                 f.write("\n".join(smtl))
-            # Edit the mtllib line to point to the new MTL file.
+
+        # Edit the mtllib line to point to the new MTL file.
+        for i, smtl in enumerate(sub_mtls):
             if len(sub_mtls) > 1:
                 savename = str(work_dir / f"{filename.stem}_{i}.obj")
             else:
-                savename = str(work_dir / f"{filename.stem}.obj")
+                savename = str(work_dir / f"{filename.stem}.obj")                
             with open(savename, "r") as f:
                 lines = f.readlines()
             for i, line in enumerate(lines):
                 if line.startswith("mtllib"):
-                    lines[i] = f"mtllib {mtl_name}.mtl\n"
-                    break
-            for i, line in enumerate(lines):
+                    lines[i] = f"mtllib {material_name_dict[savename]}.mtl\n"
                 if line.startswith("usemtl"):
-                    lines[i] = f"usemtl {material_name}\n"
-                    break
+                    lines[i] = f"usemtl {material_name_dict[savename]}\n"
             with open(savename, "w") as f:
                 f.write("".join(lines))
 
