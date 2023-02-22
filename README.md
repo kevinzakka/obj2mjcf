@@ -26,6 +26,8 @@ As of June 2022, MuJoCo does not support composite OBJ files consisting of group
 
 ## Installation
 
+**Important.** MuJoCo support for OBJ files is only available in versions 2.1.2 and above. Make sure you upgrade to the latest version via the [Releases page](https://github.com/deepmind/mujoco/releases).
+
 The recommended way to install this package is via [PyPI](https://pypi.org/project/obj2mjcf/):
 
 ```bash
