@@ -1,12 +1,9 @@
 """A CLI for processing composite Wavefront OBJ files for use in MuJoCo."""
 
-import enum
 import logging
 import os
 import re
 import shutil
-import subprocess
-import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional
@@ -20,46 +17,13 @@ from obj2mjcf import constants
 from obj2mjcf.material import Material
 from obj2mjcf.mjcf_builder import MJCFBuilder
 
-# Find the V-HACD v4.0 executable in the system path.
-# Note trimesh has not updated their code to work with v4.0 which is why we do not use
-# their `convex_decomposition` function.
-# TODO(kevin): Is there a way to assert that the V-HACD version is 4.0?
-_VHACD_EXECUTABLE = shutil.which("TestVHACD")
-
-# Names of the V-HACD output files.
-_VHACD_OUTPUTS = ["decomp.obj", "decomp.stl"]
-
-
-class FillMode(enum.Enum):
-    FLOOD = enum.auto()
-    SURFACE = enum.auto()
-    RAYCAST = enum.auto()
-
 
 @dataclass(frozen=True)
-class VhacdArgs:
+class CoacdArgs:
     enable: bool = False
     """enable convex decomposition using V-HACD"""
-    max_output_convex_hulls: int = 32
-    """maximum number of output convex hulls"""
-    voxel_resolution: int = 100_000
-    """total number of voxels to use"""
-    volume_error_percent: float = 1.0
-    """volume error allowed as a percentage"""
-    max_recursion_depth: int = 14
-    """maximum recursion depth"""
-    disable_shrink_wrap: bool = False
-    """do not shrink wrap output to source mesh"""
-    fill_mode: FillMode = FillMode.FLOOD
-    """fill mode"""
-    max_hull_vert_count: int = 64
-    """maximum number of vertices in the output convex hull"""
-    disable_async: bool = False
-    """do not run asynchronously"""
-    min_edge_length: int = 2
-    """minimum size of a voxel edge"""
-    split_hull: bool = False
-    """try to find optimal split plane location"""
+    seed: int = 0
+    """seed for reproducibility"""
 
 
 @dataclass(frozen=True)
@@ -69,16 +33,14 @@ class Args:
     converted"""
     obj_filter: Optional[str] = None
     """only convert obj files matching this regex"""
-    save_mtl: bool = False
-    """save the mtl files"""
     save_mjcf: bool = False
     """save an example XML (MJCF) file"""
     compile_model: bool = False
     """compile the MJCF file to check for errors"""
     verbose: bool = False
     """print verbose output"""
-    vhacd_args: VhacdArgs = field(default_factory=VhacdArgs)
-    """arguments to pass to V-HACD"""
+    coacd_args: CoacdArgs = field(default_factory=CoacdArgs)
+    """arguments to pass to CoACD"""
     texture_resize_percent: float = 1.0
     """resize the texture to this percentage of the original size"""
     overwrite: bool = False
@@ -99,78 +61,33 @@ def resize_texture(filename: Path, resize_percent) -> None:
     image.save(filename)
 
 
-def decompose_convex(filename: Path, work_dir: Path, vhacd_args: VhacdArgs) -> bool:
-    if not vhacd_args.enable:
+def decompose_convex(filename: Path, work_dir: Path, coacd_args: CoacdArgs) -> bool:
+    if not coacd_args.enable:
         return False
 
-    if _VHACD_EXECUTABLE is None:
-        logging.info(
-            "V-HACD was enabled but not found in the system path. Either install it "
-            "manually or run `bash install_vhacd.sh`. Skipping decomposition"
-        )
-        return False
+    cprint(f"Decomposing {filename}", "yellow")
+
+    import coacd  # noqa: F401
 
     obj_file = filename.resolve()
     logging.info(f"Decomposing {obj_file}")
 
-    with tempfile.TemporaryDirectory() as tmpdirname:
-        prev_dir = os.getcwd()
-        os.chdir(tmpdirname)
+    mesh = trimesh.load(obj_file, force="mesh")
+    mesh = coacd.Mesh(mesh.vertices, mesh.faces)
 
-        # Copy the obj file to the temporary directory.
-        shutil.copy(obj_file, tmpdirname)
+    parts = coacd.run_coacd(
+        mesh=mesh,
+        seed=coacd_args.seed,
+    )
 
-        # Call V-HACD, suppressing output.
-        ret = subprocess.run(
-            [
-                f"{_VHACD_EXECUTABLE}",
-                obj_file.name,
-                "-o",
-                "obj",
-                "-h",
-                f"{vhacd_args.max_output_convex_hulls}",
-                "-r",
-                f"{vhacd_args.voxel_resolution}",
-                "-e",
-                f"{vhacd_args.volume_error_percent}",
-                "-d",
-                f"{vhacd_args.max_recursion_depth}",
-                "-s",
-                f"{int(not vhacd_args.disable_shrink_wrap)}",
-                "-f",
-                f"{vhacd_args.fill_mode.name.lower()}",
-                "-v",
-                f"{vhacd_args.max_hull_vert_count}",
-                "-a",
-                f"{int(not vhacd_args.disable_async)}",
-                "-l",
-                f"{vhacd_args.min_edge_length}",
-                "-p",
-                f"{int(vhacd_args.split_hull)}",
-            ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.STDOUT,
-            check=True,
-        )
-        if ret.returncode != 0:
-            logging.error(f"V-HACD failed on {filename}")
-            return False
+    mesh_parts = []
+    for vs, fs in parts:
+        mesh_parts.append(trimesh.Trimesh(vs, fs))
 
-        # Remove the original obj file and the V-HACD output files.
-        for name in _VHACD_OUTPUTS + [obj_file.name]:
-            file_to_delete = Path(tmpdirname) / name
-            if file_to_delete.exists():
-                file_to_delete.unlink()
-
-        os.chdir(prev_dir)
-
-        # Get list of sorted collisions.
-        collisions = list(Path(tmpdirname).glob("*.obj"))
-        collisions.sort(key=lambda x: x.stem)
-
-        for i, filename in enumerate(collisions):
-            savename = str(work_dir / f"{obj_file.stem}_collision_{i}.obj")
-            shutil.move(str(filename), savename)
+    # Save the decomposed parts as separate OBJ files.
+    for i, p in enumerate(mesh_parts):
+        submesh_name = work_dir / f"{obj_file.stem}_collision_{i}.obj"
+        p.export(submesh_name.as_posix())
 
     return True
 
@@ -191,8 +108,8 @@ def process_obj(filename: Path, args: Args) -> None:
     work_dir.mkdir(exist_ok=True)
     logging.info(f"Saving processed meshes to {work_dir}")
 
-    # Decompose the mesh into convex pieces if V-HACD is available.
-    decomp_success = decompose_convex(filename, work_dir, args.vhacd_args)
+    # Decompose the mesh into convex pieces if desired.
+    decomp_success = decompose_convex(filename, work_dir, args.coacd_args)
 
     # Check if the OBJ files references an MTL file.
     # TODO(kevin): Should we support multiple MTL files?
@@ -307,35 +224,6 @@ def process_obj(filename: Path, args: Args) -> None:
         x for x in work_dir.glob("**/*") if x.is_file() and "material_0" in x.name
     ]:
         file.unlink()
-
-    # Save an MTL file for each submesh if desired.
-    if args.save_mtl:
-        for i, smtl in enumerate(sub_mtls):
-            mtl_name = smtl[0].split(" ")[1].strip()
-            for line in smtl:
-                if "newmtl" in line:
-                    material_name = line.split(" ")[1].strip()
-                    break
-            # Save the MTL file.
-            with open(work_dir / f"{mtl_name}.mtl", "w") as f:
-                f.write("\n".join(smtl))
-            # Edit the mtllib line to point to the new MTL file.
-            if len(sub_mtls) > 1:
-                savename = str(work_dir / f"{filename.stem}_{i}.obj")
-            else:
-                savename = str(work_dir / f"{filename.stem}.obj")
-            with open(savename, "r") as f:
-                lines = f.readlines()
-            for i, line in enumerate(lines):
-                if line.startswith("mtllib"):
-                    lines[i] = f"mtllib {mtl_name}.mtl\n"
-                    break
-            for i, line in enumerate(lines):
-                if line.startswith("usemtl"):
-                    lines[i] = f"usemtl {material_name}\n"
-                    break
-            with open(savename, "w") as f:
-                f.write("".join(lines))
 
     # Build an MJCF.
     builder = MJCFBuilder(filename, mesh, mtls, decomp_success=decomp_success)

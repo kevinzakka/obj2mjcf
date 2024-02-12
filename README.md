@@ -11,7 +11,7 @@
 
 * Splits an OBJ file into sub-meshes that are grouped by the materials referenced in the OBJ's MTL file
 * Generates an MJCF XML file that is pre-filled with materials, meshes and geom elements referencing these OBJ files
-* Optionally generates a collision mesh by performing a convex decomposition of the OBJ using [V-HACD]
+* Optionally generates a collision mesh by performing a convex decomposition of the OBJ using [CoACD]
 
 `obj2mjcf` was used to process model meshes for [MuJoCo Menagerie]:
 
@@ -34,15 +34,6 @@ The recommended way to install this package is via [PyPI](https://pypi.org/proje
 pip install --upgrade obj2mjcf
 ```
 
-### Extra: V-HACD 4.0
-
-We recommend installing [V-HACD v4.0](https://github.com/kmammou/v-hacd). If available, `obj2mjcf` will leverage it to create better collision geometry for your OBJ file.
-
-```bash
-# For macOS and Linux.
-bash install_vhacd.sh
-```
-
 ## Usage
 
 Type the following at the command line for a detailed description of available options:
@@ -53,5 +44,5 @@ obj2mjcf --help
 
 [OBJ]: https://en.wikipedia.org/wiki/Wavefront_.obj_file
 [MuJoCo]: https://github.com/deepmind/mujoco
-[V-HACD]: https://github.com/kmammou/v-hacd
+[CoACD]: https://github.com/SarahWeiii/CoACD
 [MuJoCo Menagerie]: https://github.com/deepmind/mujoco_menagerie

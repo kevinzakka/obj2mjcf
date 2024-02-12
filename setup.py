@@ -27,6 +27,7 @@ core_requirements = [
     "numpy",
     "termcolor>=2.0.1",
     "lxml>=4.9.1",
+    "coacd>=1.0.0",
 ]
 
 testing_requirements = [
