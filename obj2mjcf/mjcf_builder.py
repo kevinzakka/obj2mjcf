@@ -3,19 +3,17 @@ MJCFBuilder.py
 Description:
     This file contains the class that is used to build MJCF files.
 """
-import logging
-import os
-from lxml import etree
-from pathlib import Path
 
-from typing import List, Tuple, Union, Any
+import logging
+from pathlib import Path
+from typing import Any, List, Union
 
 import mujoco
 import trimesh
+from lxml import etree
 from termcolor import cprint
 
 from obj2mjcf.Material import Material
-
 
 # 2-space indentation for the generated XML.
 _XML_INDENTATION = "  "
@@ -23,26 +21,28 @@ _XML_INDENTATION = "  "
 
 class MJCFBuilder:
     def __init__(
-            self,
-            filename: Path,
-            mesh: Union[trimesh.base.Trimesh,Any],
-            materials: List[Material],
-            work_dir: Path = None,
+        self,
+        filename: Path,
+        mesh: Union[trimesh.base.Trimesh, Any],
+        materials: List[Material],
+        work_dir: Path = Path(),
+        decomp_success: bool = False,
     ):
         self.filename = filename
         self.mesh = mesh
         self.materials = materials
+        self.decomp_success = decomp_success
 
         self.work_dir = work_dir
-        if self.work_dir is None:
+        if self.work_dir == Path():
             self.work_dir = filename.parent / filename.stem
 
         # Define variables that will be defined later
         self.tree = None
 
     def add_visual_and_collision_default_classes(
-            self,
-            root: etree.Element,
+        self,
+        root: etree.Element,
     ):
         # Define the default element
         default_elem = etree.SubElement(root, "default")
@@ -101,9 +101,9 @@ class MJCFBuilder:
         return asset_elem
 
     def add_visual_geometries(
-            self,
-            obj_body: etree.Element,
-            asset_elem: etree.Element,
+        self,
+        obj_body: etree.Element,
+        asset_elem: etree.Element,
     ):
         # Constants
         filename = self.filename
@@ -120,7 +120,10 @@ class MJCFBuilder:
             # Add the geom to the worldbody.
             if process_mtl:
                 e_ = etree.SubElement(
-                    obj_body, "geom", material=materials[0].name, mesh=str(meshname.stem)
+                    obj_body,
+                    "geom",
+                    material=materials[0].name,
+                    mesh=str(meshname.stem),
                 )
                 e_.attrib["class"] = "visual"
             else:
@@ -142,21 +145,23 @@ class MJCFBuilder:
                     e_.attrib["class"] = "visual"
 
     def add_collision_geometries(
-            self,
-            obj_body: etree.Element,
-            asset_elem: etree.Element,
-            decomp_success: bool = False,
+        self,
+        obj_body: etree.Element,
+        asset_elem: etree.Element,
     ):
         # Constants
         filename = self.filename
         mesh = self.mesh
+        decomp_success = self.decomp_success
 
         work_dir = self.work_dir
 
         if decomp_success:
             # Find collision files from the decomposed convex hulls.
             collisions = [
-                x for x in work_dir.glob("**/*") if x.is_file() and "collision" in x.name
+                x
+                for x in work_dir.glob("**/*")
+                if x.is_file() and "collision" in x.name
             ]
             collisions.sort(key=lambda x: int(x.stem.split("_")[-1]))
 
@@ -178,12 +183,11 @@ class MJCFBuilder:
                     e_.attrib["class"] = "collision"
 
     def build(
-            self,
-            add_free_joint: bool = False,
-    ):
+        self,
+        add_free_joint: bool = False,
+    ) -> None:
         # Constants
         filename = self.filename
-        mesh = self.mesh
         mtls = self.materials
 
         # Start assembling xml tree

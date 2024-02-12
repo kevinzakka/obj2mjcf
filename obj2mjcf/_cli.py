@@ -9,17 +9,15 @@ import subprocess
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional, Sequence
+from typing import List, Optional
 
-import mujoco
 import trimesh
 import tyro
-from lxml import etree
 from PIL import Image
 from termcolor import cprint
 
+from obj2mjcf.Material import _MTL_COMMENT_CHAR, Material
 from obj2mjcf.MJCFBuilder import MJCFBuilder
-from obj2mjcf.Material import Material
 
 # Find the V-HACD v4.0 executable in the system path.
 # Note trimesh has not updated their code to work with v4.0 which is why we do not use
@@ -340,8 +338,8 @@ def process_obj(filename: Path, args: Args) -> None:
                 f.write("".join(lines))
 
     # Build an MJCF.
-    builder = MJCFBuilder(filename, mesh, mtls)
-    tree = builder.build()
+    builder = MJCFBuilder(filename, mesh, mtls, decomp_success=decomp_success)
+    builder.build()
 
     # Compile and step the physics to check for any errors.
     if args.compile_model:

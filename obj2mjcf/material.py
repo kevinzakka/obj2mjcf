@@ -1,6 +1,7 @@
-from typing import Optional, Sequence
-from dataclasses import dataclass, field
+"""A class for handling MuJoCo material properties."""
 
+from dataclasses import dataclass
+from typing import Optional, Sequence
 
 # MTL fields relevant to MuJoCo.
 _MTL_FIELDS = (
@@ -19,6 +20,7 @@ _MTL_FIELDS = (
 
 # Character used to denote a comment in an MTL file.
 _MTL_COMMENT_CHAR = "#"
+
 
 @dataclass
 class Material:
