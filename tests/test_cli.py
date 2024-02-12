@@ -1,5 +1,4 @@
 import pathlib
-import shutil
 import subprocess
 
 # Path to the directory containing this file.

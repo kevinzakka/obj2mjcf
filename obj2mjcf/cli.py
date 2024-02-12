@@ -191,15 +191,15 @@ def process_obj(filename: Path, args: Args) -> None:
 
     if isinstance(mesh, trimesh.base.Trimesh):
         # No submeshes, just save the mesh.
-        savename = str(work_dir / f"{filename.stem}.obj")
+        savename = work_dir / f"{filename.stem}.obj"
         logging.info(f"Saving mesh {savename}")
-        mesh.export(savename, include_texture=True, header=None)
+        mesh.export(savename.as_posix(), include_texture=True, header=None)
     else:
         logging.info("Grouping and saving submeshes by material")
         for i, geom in enumerate(mesh.geometry.values()):
-            savename = str(work_dir / f"{filename.stem}_{i}.obj")
+            savename = work_dir / f"{filename.stem}_{i}.obj"
             logging.info(f"Saving submesh {savename}")
-            geom.export(savename, include_texture=True, header=None)
+            geom.export(savename.as_posix(), include_texture=True, header=None)
 
     # Edge case handling where the material file can have many materials but the OBJ
     # itself only references one. In that case, we trim out the extra materials and
