@@ -1,29 +1,13 @@
-"""A class for handling MuJoCo material properties."""
-
 from dataclasses import dataclass
 from typing import Optional, Sequence
 
-# MTL fields relevant to MuJoCo.
-_MTL_FIELDS = (
-    # Ambient, diffuse and specular colors.
-    "Ka",
-    "Kd",
-    "Ks",
-    # d or Tr are used for the rgba transparency.
-    "d",
-    "Tr",
-    # Shininess.
-    "Ns",
-    # References a texture file.
-    "map_Kd",
-)
-
-# Character used to denote a comment in an MTL file.
-_MTL_COMMENT_CHAR = "#"
+from obj2mjcf import constants
 
 
 @dataclass
 class Material:
+    """A convenience class for constructing MuJoCo materials from MTL files."""
+
     name: str
     Ka: Optional[str] = None
     Kd: Optional[str] = None
@@ -38,7 +22,7 @@ class Material:
         """Construct a Material object from a string."""
         attrs = {"name": lines[0].split(" ")[1].strip()}
         for line in lines[1:]:
-            for attr in _MTL_FIELDS:
+            for attr in constants.MTL_FIELDS:
                 if line.startswith(attr):
                     elems = line.split(" ")[1:]
                     elems = [elem for elem in elems if elem != ""]

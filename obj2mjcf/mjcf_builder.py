@@ -1,9 +1,3 @@
-"""
-MJCFBuilder.py
-Description:
-    This file contains the class that is used to build MJCF files.
-"""
-
 import logging
 from pathlib import Path
 from typing import Any, List, Union
@@ -13,13 +7,13 @@ import trimesh
 from lxml import etree
 from termcolor import cprint
 
+from obj2mjcf import constants
 from obj2mjcf.material import Material
-
-# 2-space indentation for the generated XML.
-_XML_INDENTATION = "  "
 
 
 class MJCFBuilder:
+    """Builds a MuJoCo XML model from a mesh and materials."""
+
     def __init__(
         self,
         filename: Path,
@@ -37,17 +31,16 @@ class MJCFBuilder:
         if self.work_dir == Path():
             self.work_dir = filename.parent / filename.stem
 
-        # Define variables that will be defined later
         self.tree = None
 
     def add_visual_and_collision_default_classes(
         self,
         root: etree.Element,
     ):
-        # Define the default element
+        # Define the default element.
         default_elem = etree.SubElement(root, "default")
 
-        # Define visual defaults
+        # Define visual defaults.
         visual_default_elem = etree.SubElement(default_elem, "default")
         visual_default_elem.attrib["class"] = "visual"
         etree.SubElement(
@@ -59,13 +52,13 @@ class MJCFBuilder:
             conaffinity="0",
         )
 
-        # Define collision defaults
+        # Define collision defaults.
         collision_default_elem = etree.SubElement(default_elem, "default")
         collision_default_elem.attrib["class"] = "collision"
         etree.SubElement(collision_default_elem, "geom", group="3", type="mesh")
 
     def add_assets(self, root: etree.Element, mtls: List[Material]) -> etree.Element:
-        # Define the assets element
+        # Define the assets element.
         asset_elem = etree.SubElement(root, "asset")
 
         for material in mtls:
@@ -112,7 +105,7 @@ class MJCFBuilder:
 
         process_mtl = len(materials) > 0
 
-        # Add visual geometries to object body
+        # Add visual geometries to object body.
         if isinstance(mesh, trimesh.base.Trimesh):
             meshname = Path(f"{filename.stem}.obj")
             # Add the mesh to assets.
@@ -149,7 +142,7 @@ class MJCFBuilder:
         obj_body: etree.Element,
         asset_elem: etree.Element,
     ):
-        # Constants
+        # Constants.
         filename = self.filename
         mesh = self.mesh
         decomp_success = self.decomp_success
@@ -186,39 +179,40 @@ class MJCFBuilder:
         self,
         add_free_joint: bool = False,
     ) -> None:
-        # Constants
+        # Constants.
         filename = self.filename
         mtls = self.materials
 
-        # Start assembling xml tree
+        # Start assembling xml tree.
         root = etree.Element("mujoco", model=filename.stem)
 
-        # Add Defaults + Assets
+        # Add defaults.
         self.add_visual_and_collision_default_classes(root)
+
+        # Add assets.
         asset_elem = self.add_assets(root, mtls)
 
-        # Add Worldbody
+        # Add worldbody.
         worldbody_elem = etree.SubElement(root, "worldbody")
         obj_body = etree.SubElement(worldbody_elem, "body", name=filename.stem)
         if add_free_joint:
             etree.SubElement(obj_body, "freejoint")
 
-        # Add visual and collision geometries to object body
+        # Add visual and collision geometries to object body.
         self.add_visual_geometries(obj_body, asset_elem)
         self.add_collision_geometries(obj_body, asset_elem)
 
-        # Collect Tree
+        # Create the tree.
         tree = etree.ElementTree(root)
-        etree.indent(tree, space=_XML_INDENTATION, level=0)
-
+        etree.indent(tree, space=constants.XML_INDENTATION, level=0)
         self.tree = tree
 
     def compile_model(self):
-        # Constants
+        # Constants.
         filename = self.filename
         work_dir = self.work_dir
 
-        # Pull up tree if possible
+        # Pull up tree if possible.
         tree = self.tree
         if tree is None:
             raise ValueError("Tree has not been defined yet.")
@@ -240,13 +234,11 @@ class MJCFBuilder:
     def save_mjcf(
         self,
     ):
-        # Constants
+        # Constants.
         filename = self.filename
         work_dir = self.work_dir
 
-        # Input Processing
-
-        # Pull up tree if possible
+        # Pull up tree if possible.
         tree = self.tree
         if tree is None:
             raise ValueError("Tree has not been defined yet.")
