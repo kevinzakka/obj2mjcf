@@ -50,6 +50,8 @@ classifiers = [
     "Programming Language :: Python :: 3.7",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 
@@ -82,5 +84,5 @@ setup(
         "dev": dev_requirements,
     },
     classifiers=classifiers,
-    entry_points={"console_scripts": [f"{name}={name}._cli:main"]},
+    entry_points={"console_scripts": [f"{name}={name}.cli:main"]},
 )

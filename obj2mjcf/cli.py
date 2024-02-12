@@ -16,7 +16,8 @@ import tyro
 from PIL import Image
 from termcolor import cprint
 
-from obj2mjcf.material import _MTL_COMMENT_CHAR, Material
+from obj2mjcf import constants
+from obj2mjcf.material import Material
 from obj2mjcf.mjcf_builder import MJCFBuilder
 
 # Find the V-HACD v4.0 executable in the system path.
@@ -27,9 +28,6 @@ _VHACD_EXECUTABLE = shutil.which("TestVHACD")
 
 # Names of the V-HACD output files.
 _VHACD_OUTPUTS = ["decomp.obj", "decomp.stl"]
-
-# 2-space indentation for the generated XML.
-_XML_INDENTATION = "  "
 
 
 class FillMode(enum.Enum):
@@ -222,7 +220,9 @@ def process_obj(filename: Path, args: Args) -> None:
         with open(mtl_filename, "r") as f:
             lines = f.readlines()
         # Remove comments.
-        lines = [line for line in lines if not line.startswith(_MTL_COMMENT_CHAR)]
+        lines = [
+            line for line in lines if not line.startswith(constants.MTL_COMMENT_CHAR)
+        ]
         # Remove empty lines.
         lines = [line for line in lines if line.strip()]
         # Remove trailing whitespace.
