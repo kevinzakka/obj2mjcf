@@ -9,14 +9,15 @@ import subprocess
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional, Sequence
+from typing import List, Optional
 
-import mujoco
 import trimesh
 import tyro
-from lxml import etree
 from PIL import Image
 from termcolor import cprint
+
+from obj2mjcf.material import _MTL_COMMENT_CHAR, Material
+from obj2mjcf.mjcf_builder import MJCFBuilder
 
 # Find the V-HACD v4.0 executable in the system path.
 # Note trimesh has not updated their code to work with v4.0 which is why we do not use
@@ -29,24 +30,6 @@ _VHACD_OUTPUTS = ["decomp.obj", "decomp.stl"]
 
 # 2-space indentation for the generated XML.
 _XML_INDENTATION = "  "
-
-# MTL fields relevant to MuJoCo.
-_MTL_FIELDS = (
-    # Ambient, diffuse and specular colors.
-    "Ka",
-    "Kd",
-    "Ks",
-    # d or Tr are used for the rgba transparency.
-    "d",
-    "Tr",
-    # Shininess.
-    "Ns",
-    # References a texture file.
-    "map_Kd",
-)
-
-# Character used to denote a comment in an MTL file.
-_MTL_COMMENT_CHAR = "#"
 
 
 class FillMode(enum.Enum):
@@ -104,58 +87,6 @@ class Args:
     """overwrite previous run output"""
     add_free_joint: bool = False
     """add a free joint to the root body"""
-
-
-@dataclass
-class Material:
-    name: str
-    Ka: Optional[str] = None
-    Kd: Optional[str] = None
-    Ks: Optional[str] = None
-    d: Optional[str] = None
-    Tr: Optional[str] = None
-    Ns: Optional[str] = None
-    map_Kd: Optional[str] = None
-
-    @staticmethod
-    def from_string(lines: Sequence[str]) -> "Material":
-        """Construct a Material object from a string."""
-        attrs = {"name": lines[0].split(" ")[1].strip()}
-        for line in lines[1:]:
-            for attr in _MTL_FIELDS:
-                if line.startswith(attr):
-                    elems = line.split(" ")[1:]
-                    elems = [elem for elem in elems if elem != ""]
-                    attrs[attr] = " ".join(elems)
-                    break
-        return Material(**attrs)
-
-    def mjcf_rgba(self) -> str:
-        Kd = self.Kd or "1.0 1.0 1.0"
-        if self.d is not None:  # alpha
-            alpha = self.d
-        elif self.Tr is not None:  # 1 - alpha
-            alpha = str(1.0 - float(self.Tr))
-        else:
-            alpha = "1.0"
-        # TODO(kevin): Figure out how to use Ka for computing rgba.
-        return f"{Kd} {alpha}"
-
-    def mjcf_shininess(self) -> str:
-        if self.Ns is not None:
-            # Normalize Ns value to [0, 1]. Ns values normally range from 0 to 1000.
-            Ns = float(self.Ns) / 1_000
-        else:
-            Ns = 0.5
-        return f"{Ns}"
-
-    def mjcf_specular(self) -> str:
-        if self.Ks is not None:
-            # Take the average of the specular RGB values.
-            Ks = sum(list(map(float, self.Ks.split(" ")))) / 3
-        else:
-            Ks = 0.5
-        return f"{Ks}"
 
 
 def resize_texture(filename: Path, resize_percent) -> None:
@@ -407,137 +338,16 @@ def process_obj(filename: Path, args: Args) -> None:
                 f.write("".join(lines))
 
     # Build an MJCF.
-    root = etree.Element("mujoco", model=filename.stem)
-
-    # Add visual and collision default classes.
-    default_elem = etree.SubElement(root, "default")
-    visual_default_elem = etree.SubElement(default_elem, "default")
-    visual_default_elem.attrib["class"] = "visual"
-    etree.SubElement(
-        visual_default_elem,
-        "geom",
-        group="2",
-        type="mesh",
-        contype="0",
-        conaffinity="0",
-    )
-    collision_default_elem = etree.SubElement(default_elem, "default")
-    collision_default_elem.attrib["class"] = "collision"
-    etree.SubElement(collision_default_elem, "geom", group="3", type="mesh")
-
-    # Add assets.
-    asset_elem = etree.SubElement(root, "asset")
-    for material in mtls:
-        if material.map_Kd is not None:
-            # Create the texture asset.
-            texture = Path(material.map_Kd)
-            etree.SubElement(
-                asset_elem,
-                "texture",
-                type="2d",
-                name=texture.stem,
-                file=texture.name,
-            )
-            # Reference the texture asset in a material asset.
-            etree.SubElement(
-                asset_elem,
-                "material",
-                name=material.name,
-                texture=texture.stem,
-                specular=material.mjcf_specular(),
-                shininess=material.mjcf_shininess(),
-            )
-        else:
-            etree.SubElement(
-                asset_elem,
-                "material",
-                name=material.name,
-                specular=material.mjcf_specular(),
-                shininess=material.mjcf_shininess(),
-                rgba=material.mjcf_rgba(),
-            )
-
-    worldbody_elem = etree.SubElement(root, "worldbody")
-    obj_body = etree.SubElement(worldbody_elem, "body", name=filename.stem)
-    if args.add_free_joint:
-        etree.SubElement(obj_body, "freejoint")
-
-    # Add visual geoms.
-    if isinstance(mesh, trimesh.base.Trimesh):
-        meshname = Path(f"{filename.stem}.obj")
-        # Add the mesh to assets.
-        etree.SubElement(asset_elem, "mesh", file=str(meshname))
-        # Add the geom to the worldbody.
-        if process_mtl:
-            e_ = etree.SubElement(
-                obj_body, "geom", material=material.name, mesh=str(meshname.stem)
-            )
-            e_.attrib["class"] = "visual"
-        else:
-            e_ = etree.SubElement(obj_body, "geom", mesh=meshname.stem)
-            e_.attrib["class"] = "visual"
-    else:
-        for i, (name, geom) in enumerate(mesh.geometry.items()):
-            meshname = Path(f"{filename.stem}_{i}.obj")
-            # Add the mesh to assets.
-            etree.SubElement(asset_elem, "mesh", file=str(meshname))
-            # Add the geom to the worldbody.
-            if process_mtl:
-                e_ = etree.SubElement(
-                    obj_body, "geom", mesh=meshname.stem, material=name
-                )
-                e_.attrib["class"] = "visual"
-            else:
-                e_ = etree.SubElement(obj_body, "geom", mesh=meshname.stem)
-                e_.attrib["class"] = "visual"
-
-    # Add collision geoms.
-    if decomp_success:
-        # Find collision files from the decomposed convex hulls.
-        collisions = [
-            x for x in work_dir.glob("**/*") if x.is_file() and "collision" in x.name
-        ]
-        collisions.sort(key=lambda x: int(x.stem.split("_")[-1]))
-
-        for collision in collisions:
-            etree.SubElement(asset_elem, "mesh", file=collision.name)
-            e_ = etree.SubElement(obj_body, "geom", mesh=collision.stem)
-            e_.attrib["class"] = "collision"
-    else:
-        # If no decomposed convex hulls were created, use the original mesh as the
-        # collision mesh.
-        if isinstance(mesh, trimesh.base.Trimesh):
-            e_ = etree.SubElement(obj_body, "geom", mesh=meshname.stem)
-            e_.attrib["class"] = "collision"
-        else:
-            for i, (name, geom) in enumerate(mesh.geometry.items()):
-                meshname = Path(f"{filename.stem}_{i}.obj")
-                e_ = etree.SubElement(obj_body, "geom", mesh=meshname.stem)
-                e_.attrib["class"] = "collision"
-
-    tree = etree.ElementTree(root)
-    etree.indent(tree, space=_XML_INDENTATION, level=0)
+    builder = MJCFBuilder(filename, mesh, mtls, decomp_success=decomp_success)
+    builder.build()
 
     # Compile and step the physics to check for any errors.
     if args.compile_model:
-        try:
-            tmp_path = work_dir / "tmp.xml"
-            tree.write(tmp_path, encoding="utf-8")
-            model = mujoco.MjModel.from_xml_path(str(tmp_path))
-            data = mujoco.MjData(model)
-            mujoco.mj_step(model, data)
-            cprint(f"{filename} compiled successfully!", "green")
-        except Exception as e:
-            cprint(f"Error compiling model: {e}", "red")
-        finally:
-            if tmp_path.exists():
-                tmp_path.unlink()
+        builder.compile_model()
 
     # Dump.
     if args.save_mjcf:
-        xml_path = str(work_dir / f"{filename.stem}.xml")
-        tree.write(xml_path, encoding="utf-8")
-        logging.info(f"Saved MJCF to {xml_path}")
+        builder.save_mjcf()
 
 
 def main() -> None:
