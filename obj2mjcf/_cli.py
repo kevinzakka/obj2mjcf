@@ -16,8 +16,8 @@ import tyro
 from PIL import Image
 from termcolor import cprint
 
-from obj2mjcf.Material import _MTL_COMMENT_CHAR, Material
-from obj2mjcf.MJCFBuilder import MJCFBuilder
+from obj2mjcf.material import _MTL_COMMENT_CHAR, Material
+from obj2mjcf.mjcf_builder import MJCFBuilder
 
 # Find the V-HACD v4.0 executable in the system path.
 # Note trimesh has not updated their code to work with v4.0 which is why we do not use

@@ -13,7 +13,7 @@ import trimesh
 from lxml import etree
 from termcolor import cprint
 
-from obj2mjcf.Material import Material
+from obj2mjcf.material import Material
 
 # 2-space indentation for the generated XML.
 _XML_INDENTATION = "  "
