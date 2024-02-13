@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Any, List, Union
 
 import mujoco
+import numpy as np
 import trimesh
 from lxml import etree
 from termcolor import cprint
@@ -109,14 +110,14 @@ class MJCFBuilder:
         if isinstance(mesh, trimesh.base.Trimesh):
             meshname = Path(f"{filename.stem}.obj")
             # Add the mesh to assets.
-            etree.SubElement(asset_elem, "mesh", file=str(meshname))
+            etree.SubElement(asset_elem, "mesh", file=meshname.as_posix())
             # Add the geom to the worldbody.
             if process_mtl:
                 e_ = etree.SubElement(
                     obj_body,
                     "geom",
                     material=materials[0].name,
-                    mesh=str(meshname.stem),
+                    mesh=meshname.stem,
                 )
                 e_.attrib["class"] = "visual"
             else:
@@ -126,7 +127,7 @@ class MJCFBuilder:
             for i, (name, geom) in enumerate(mesh.geometry.items()):
                 meshname = Path(f"{filename.stem}_{i}.obj")
                 # Add the mesh to assets.
-                etree.SubElement(asset_elem, "mesh", file=str(meshname))
+                etree.SubElement(asset_elem, "mesh", file=meshname.as_posix())
                 # Add the geom to the worldbody.
                 if process_mtl:
                     e_ = etree.SubElement(
@@ -160,7 +161,13 @@ class MJCFBuilder:
 
             for collision in collisions:
                 etree.SubElement(asset_elem, "mesh", file=collision.name)
-                e_ = etree.SubElement(obj_body, "geom", mesh=collision.stem)
+                rgb = np.random.rand(3)  # Generate random color for collision meshes.
+                e_ = etree.SubElement(
+                    obj_body,
+                    "geom",
+                    mesh=collision.stem,
+                    rgba=f"{rgb[0]} {rgb[1]} {rgb[2]} 1",
+                )
                 e_.attrib["class"] = "collision"
         else:
             # If no decomposed convex hulls were created, use the original mesh as the
@@ -221,7 +228,7 @@ class MJCFBuilder:
         try:
             tmp_path = work_dir / "tmp.xml"
             tree.write(tmp_path, encoding="utf-8")
-            model = mujoco.MjModel.from_xml_path(str(tmp_path))
+            model = mujoco.MjModel.from_xml_path(tmp_path.as_posix())
             data = mujoco.MjData(model)
             mujoco.mj_step(model, data)
             cprint(f"{filename} compiled successfully!", "green")
@@ -244,6 +251,6 @@ class MJCFBuilder:
             raise ValueError("Tree has not been defined yet.")
 
         # Save the MJCF file.
-        xml_path = str(work_dir / f"{filename.stem}.xml")
-        tree.write(xml_path, encoding="utf-8")
+        xml_path = work_dir / f"{filename.stem}.xml"
+        tree.write(xml_path.as_posix(), encoding="utf-8")
         logging.info(f"Saved MJCF to {xml_path}")
