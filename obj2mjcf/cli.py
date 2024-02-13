@@ -4,7 +4,7 @@ import logging
 import os
 import re
 import shutil
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import List, Optional
 
@@ -20,10 +20,29 @@ from obj2mjcf.mjcf_builder import MJCFBuilder
 
 @dataclass(frozen=True)
 class CoacdArgs:
-    enable: bool = False
-    """enable convex decomposition using V-HACD"""
+    """Arguments to pass to CoACD.
+
+    Defaults and descriptions are copied from: https://github.com/SarahWeiii/CoACD
+    """
+
+    preprocess_resolution: int = 50
+    """resolution for manifold preprocess (20~100), default = 50"""
+    threshold: float = 0.05
+    """concavity threshold for terminating the decomposition (0.01~1), default = 0.05"""
+    max_convex_hull: int = -1
+    """max # convex hulls in the result, -1 for no maximum limitation"""
+    mcts_iterations: int = 100
+    """number of search iterations in MCTS (60~2000), default = 100"""
+    mcts_max_depth: int = 3
+    """max search depth in MCTS (2~7), default = 3"""
+    mcts_nodes: int = 20
+    """max number of child nodes in MCTS (10~40), default = 20"""
+    resolution: int = 2000
+    """sampling resolution for Hausdorff distance calculation (1e3~1e4), default = 2000"""
+    pca: bool = False
+    """enable PCA pre-processing, default = false"""
     seed: int = 0
-    """seed for reproducibility"""
+    """random seed used for sampling, default = 0"""
 
 
 @dataclass(frozen=True)
@@ -39,6 +58,8 @@ class Args:
     """compile the MJCF file to check for errors"""
     verbose: bool = False
     """print verbose output"""
+    decompose: bool = False
+    """approximate mesh decomposition using CoACD"""
     coacd_args: CoacdArgs = field(default_factory=CoacdArgs)
     """arguments to pass to CoACD"""
     texture_resize_percent: float = 1.0
@@ -62,9 +83,6 @@ def resize_texture(filename: Path, resize_percent) -> None:
 
 
 def decompose_convex(filename: Path, work_dir: Path, coacd_args: CoacdArgs) -> bool:
-    if not coacd_args.enable:
-        return False
-
     cprint(f"Decomposing {filename}", "yellow")
 
     import coacd  # noqa: F401
@@ -77,7 +95,7 @@ def decompose_convex(filename: Path, work_dir: Path, coacd_args: CoacdArgs) -> b
 
     parts = coacd.run_coacd(
         mesh=mesh,
-        seed=coacd_args.seed,
+        **asdict(coacd_args),
     )
 
     mesh_parts = []
@@ -109,7 +127,9 @@ def process_obj(filename: Path, args: Args) -> None:
     logging.info(f"Saving processed meshes to {work_dir}")
 
     # Decompose the mesh into convex pieces if desired.
-    decomp_success = decompose_convex(filename, work_dir, args.coacd_args)
+    decomp_success = False
+    if args.decompose:
+        decomp_success = decompose_convex(filename, work_dir, args.coacd_args)
 
     # Check if the OBJ files references an MTL file.
     # TODO(kevin): Should we support multiple MTL files?
