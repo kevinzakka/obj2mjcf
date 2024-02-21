@@ -247,7 +247,7 @@ def process_obj(filename: Path, args: Args) -> None:
 
     # Build an MJCF.
     builder = MJCFBuilder(filename, mesh, mtls, decomp_success=decomp_success)
-    builder.build()
+    builder.build(add_free_joint=args.add_free_joint)
 
     # Compile and step the physics to check for any errors.
     if args.compile_model:
