@@ -239,6 +239,8 @@ def process_obj(filename: Path, args: Args) -> None:
         sub_mtls = [smtl]
         mtls = [Material.from_string(smtl)]
 
+    mtls = list({obj.name: obj for obj in mtls}.values())
+
     # Delete any MTL files that were created during trimesh processing, if any.
     for file in [
         x for x in work_dir.glob("**/*") if x.is_file() and "material_0" in x.name
