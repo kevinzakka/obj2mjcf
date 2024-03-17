@@ -91,7 +91,7 @@ def decompose_convex(filename: Path, work_dir: Path, coacd_args: CoacdArgs) -> b
     logging.info(f"Decomposing {obj_file}")
 
     mesh = trimesh.load(obj_file, force="mesh")
-    mesh = coacd.Mesh(mesh.vertices, mesh.faces)
+    mesh = coacd.Mesh(mesh.vertices, mesh.faces)  # type: ignore
 
     parts = coacd.run_coacd(
         mesh=mesh,
@@ -216,7 +216,7 @@ def process_obj(filename: Path, args: Args) -> None:
         mesh.export(savename.as_posix(), include_texture=True, header=None)
     else:
         logging.info("Grouping and saving submeshes by material")
-        for i, geom in enumerate(mesh.geometry.values()):
+        for i, geom in enumerate(mesh.geometry.values()):  # type: ignore
             savename = work_dir / f"{filename.stem}_{i}.obj"
             logging.info(f"Saving submesh {savename}")
             geom.export(savename.as_posix(), include_texture=True, header=None)
