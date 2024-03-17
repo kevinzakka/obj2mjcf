@@ -1,11 +1,11 @@
 [tool.black]
 line-length = 88  # Default.
-target-version = ["py38", "py39"]
-
-[tool.isort]
-profile = "black"
-skip_gitignore = true
-single_line_exclusions = ["typing"]
+target-version = ["py312"]
 
 [tool.mypy]
 ignore_missing_imports = true
+
+[tool.ruff]
+extend-exclude = ["third_party", "dist", "build"]
+lint.select = ["E", "F", "I", "W"]
+lint.ignore = ["E501"]
