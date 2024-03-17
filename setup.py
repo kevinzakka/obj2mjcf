@@ -32,7 +32,7 @@ core_requirements = [
 
 testing_requirements = [
     "pytest",
-]
+] + core_requirements
 
 dev_requirements = [
     "black",
@@ -82,6 +82,7 @@ setup(
     install_requires=core_requirements,
     extras_require={
         "testing": testing_requirements,
+        "test": testing_requirements,
         "dev": dev_requirements,
     },
     classifiers=classifiers,
