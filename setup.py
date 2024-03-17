@@ -47,7 +47,6 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Natural Language :: English",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.7",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
@@ -78,7 +77,7 @@ setup(
     license_files=("LICENSE",),
     packages=find_packages(),
     package_data={f"{name}": ["py.typed"]},
-    python_requires=">=3.7",
+    python_requires=">=3.8",
     install_requires=core_requirements,
     extras_require={
         "testing": testing_requirements,
