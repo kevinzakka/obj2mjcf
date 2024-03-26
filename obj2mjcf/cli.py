@@ -243,7 +243,9 @@ def process_obj(filename: Path, args: Args) -> None:
 
     # Delete any MTL files that were created during trimesh processing, if any.
     for file in [
-        x for x in work_dir.glob("**/*") if x.is_file() and "material_0" in x.name
+        x
+        for x in work_dir.glob("**/*")
+        if x.is_file() and "material_0" in x.name and not x.name.endswith(".png")
     ]:
         file.unlink()
 
