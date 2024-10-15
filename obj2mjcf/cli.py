@@ -1,5 +1,6 @@
 """A CLI for processing composite Wavefront OBJ files for use in MuJoCo."""
 
+from collections.abc import Iterable
 import logging
 import os
 import re
@@ -110,6 +111,15 @@ def decompose_convex(filename: Path, work_dir: Path, coacd_args: CoacdArgs) -> b
     return True
 
 
+def parse_mtl_name(lines: Iterable[str]) -> Optional[str]:
+    mtl_regex = re.compile(r"^mtllib\s+(.+?\.mtl)(?:\s*#.*)?\s*\n?$")
+    for line in lines:
+        match = mtl_regex.match(line)
+        if match is not None:
+            name = match.group(1)
+            return name
+    return None
+
 def process_obj(filename: Path, args: Args) -> None:
     # Create a directory with the same name as the OBJ file. The processed submeshes
     # and materials will be stored there.
@@ -133,13 +143,11 @@ def process_obj(filename: Path, args: Args) -> None:
 
     # Check if the OBJ files references an MTL file.
     # TODO(kevin): Should we support multiple MTL files?
-    process_mtl = False
-    with open(filename, "r") as f:
-        for line in f.readlines():
-            if line.startswith("mtllib"):  # Deals with commented out lines.
-                process_mtl = True
-                name = line.split()[1]
-                break
+    with filename.open("r") as f:
+        name = parse_mtl_name(f.readlines())
+
+    process_mtl = name is not None
+
 
     sub_mtls: List[List[str]] = []
     mtls: List[Material] = []
